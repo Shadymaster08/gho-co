@@ -1,7 +1,4 @@
-import { notFound } from 'next/navigation'
-
-// The landing page lives at app/page.tsx (outside the customer layout).
-// This file exists only to satisfy the route group; it should never be reached.
+// Route deferred to app/page.tsx which serves / without the customer layout.
 export default function CustomerHomePage() {
-  notFound()
+  return null
 }
