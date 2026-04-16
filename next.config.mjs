@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Playwright is local-only (needs a display). Don't bundle it on Vercel.
-  serverExternalPackages: ['playwright', 'playwright-core'],
+  experimental: {
+    // Playwright is local-only (needs a display). Don't bundle it on Vercel.
+    serverComponentsExternalPackages: ['playwright', 'playwright-core'],
+  },
 };
 
 export default nextConfig;
