@@ -1,4 +1,5 @@
-// Route deferred to app/page.tsx which serves / without the customer layout.
+'use client'
+// Stub — app/page.tsx serves / without the customer layout.
 export default function CustomerHomePage() {
   return null
 }
