@@ -47,7 +47,7 @@ export default function PrintOrderPage() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { uploadFile, progress, uploading } = useUpload(orderId)
+  const { uploadFile, progress, uploading } = useUpload()
 
   const availableColors = MATERIALS[material]?.colors ?? []
 
@@ -94,7 +94,7 @@ export default function PrintOrderPage() {
 
     if (mode === 'upload' && stlFile) {
       try {
-        const result = await uploadFile(stlFile, 'stl')
+        const result = await uploadFile(stlFile, 'stl', order_id)
         await fetch(`/api/orders/${order_id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },

@@ -28,7 +28,7 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
   const [uploadedRefs, setUploadedRefs] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const { uploadFile, progress, uploading } = useUpload(orderId)
+  const { uploadFile, progress, uploading } = useUpload()
 
   function addRefFile(file: File) {
     if (refFiles.length >= 5) { toast.error('Maximum 5 reference images'); return }
@@ -71,7 +71,7 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
     const refs: string[] = []
     try {
       for (const file of refFiles) {
-        const result = await uploadFile(file, 'reference')
+        const result = await uploadFile(file, 'reference', order_id)
         refs.push(result.public_url)
       }
     } catch {
