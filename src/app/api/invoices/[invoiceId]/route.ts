@@ -1,0 +1,33 @@
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+
+export async function GET(request: Request, { params }: { params: { invoiceId: string } }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { data, error } = await supabase.from('invoices').select('*, orders(*)').eq('id', params.invoiceId).single()
+  if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  return NextResponse.json(data)
+}
+
+export async function PATCH(request: Request, { params }: { params: { invoiceId: string } }) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await request.json()
+  const allowed = ['status', 'paid_at', 'due_date', 'notes', 'payment_instructions', 'line_items', 'tax_rate']
+  const update: Record<string, unknown> = {}
+  for (const key of allowed) {
+    if (key in body) update[key] = body[key]
+  }
+
+  if (body.status === 'paid' && !body.paid_at) update.paid_at = new Date().toISOString()
+
+  const { data, error } = await supabase.from('invoices').update(update).eq('id', params.invoiceId).select().single()
+  if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  return NextResponse.json(data)
+}
