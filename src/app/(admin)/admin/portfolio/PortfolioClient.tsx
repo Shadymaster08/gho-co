@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { toast } from 'sonner'
 import { Upload, Loader2, Eye, EyeOff, Trash2, Copy, Check, X, CheckSquare, Square } from 'lucide-react'
+import { useLocale } from '@/lib/i18n/LocaleContext'
 
 interface PortfolioImage {
   id: string
@@ -16,6 +17,8 @@ interface PortfolioImage {
 }
 
 export default function PortfolioClient({ initial }: { initial: PortfolioImage[] }) {
+  const { t } = useLocale()
+  const P = t.admin.portfolio
   const [images, setImages] = useState<PortfolioImage[]>(initial)
   const [uploading, setUploading] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
@@ -27,9 +30,9 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
   const inputRef = useRef<HTMLInputElement>(null)
 
   const productTypes = [
-    { value: 'shirt', label: 'Shirt / Clothing', emoji: '👕' },
-    { value: '3d_print', label: '3D Print', emoji: '🧊' },
-    { value: 'lighting', label: 'Lighting', emoji: '💡' },
+    { value: 'shirt', label: P.productType.shirt, emoji: '👕' },
+    { value: '3d_print', label: P.productType.print, emoji: '🧊' },
+    { value: 'lighting', label: P.productType.lighting, emoji: '💡' },
   ]
 
   async function handleFiles(files: FileList | null) {
@@ -69,12 +72,12 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                 ? { ...img, status: 'done', generated_public_url: data.generated_public_url }
                 : img
             ))
-            toast.success('Image generated!')
+            toast.success(P.generatedSuccess)
           } else {
             setImages(prev => prev.map(img =>
               img.id === id ? { ...img, status: 'error' } : img
             ))
-            toast.error('Generation failed: ' + (data.error ?? 'Unknown error'))
+            toast.error(P.generationError + (data.error ?? 'Unknown error'))
           }
         })
       } catch (err) {
@@ -93,7 +96,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
     })
     if (res.ok) {
       setImages(prev => prev.map(i => i.id === img.id ? { ...i, published: next } : i))
-      toast.success(next ? 'Published to portfolio' : 'Unpublished')
+      toast.success(next ? P.publishedToast : P.unpublishedToast)
     }
   }
 
@@ -106,7 +109,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
     })
     if (res.ok) {
       setImages(prev => prev.filter(i => i.id !== id))
-      toast.success('Deleted')
+      toast.success(P.deleted)
     }
   }
 
@@ -181,9 +184,9 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
           <div className="flex items-center gap-3">
             <button onClick={toggleSelectAll} className="flex items-center gap-2 text-sm text-[#6e6e73] hover:text-[#1d1d1f]">
               {selected.size === images.length ? <CheckSquare className="h-4 w-4 text-[#0071e3]" /> : <Square className="h-4 w-4" />}
-              {selected.size === images.length ? 'Deselect all' : 'Select all'}
+              {selected.size === images.length ? P.deselectAll : P.selectAll}
             </button>
-            <span className="text-sm text-[#86868b]">{selected.size} selected</span>
+            <span className="text-sm text-[#86868b]">{P.selected.replace('{n}', String(selected.size))}</span>
           </div>
           <button
             onClick={deleteSelected}
@@ -191,7 +194,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
             className="flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
           >
             {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            Delete {selected.size}
+            {P.deleteSelected.replace('{n}', String(selected.size))}
           </button>
         </div>
       )}
@@ -226,7 +229,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                   : 'border-[#d2d2d7] text-[#6e6e73] hover:border-[#6e6e73]'
               }`}
             >
-              {side} of garment
+              {side === 'front' ? P.front : P.back}
             </button>
           ))}
         </div>
@@ -245,9 +248,9 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
           <Upload className="h-8 w-8 text-[#86868b]" />
         )}
         <p className="mt-3 text-sm font-medium text-[#1d1d1f]">
-          {uploading ? 'Uploading…' : 'Drop product photos here, or tap to select'}
+          {uploading ? P.uploading : P.dropzone}
         </p>
-        <p className="mt-1 text-xs text-[#86868b]">JPEG, PNG, WebP, HEIC — multiple files supported</p>
+        <p className="mt-1 text-xs text-[#86868b]">{P.dropzoneFormats}</p>
         <input
           ref={inputRef}
           type="file"
@@ -260,13 +263,13 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
 
       {/* Grid */}
       {images.length === 0 ? (
-        <p className="text-center text-sm text-[#86868b]">No images yet — upload your first product shot above.</p>
+        <p className="text-center text-sm text-[#86868b]">{P.noImages}</p>
       ) : (
         <>
           <div className="mb-3 flex items-center justify-between">
             <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs text-[#6e6e73] hover:text-[#1d1d1f]">
               {selected.size === images.length && images.length > 0 ? <CheckSquare className="h-3.5 w-3.5 text-[#0071e3]" /> : <Square className="h-3.5 w-3.5" />}
-              {selected.size === images.length && images.length > 0 ? 'Deselect all' : 'Select all'}
+              {selected.size === images.length && images.length > 0 ? P.deselectAll : P.selectAll}
             </button>
           </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -296,7 +299,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                     </div>
                   ) : img.status === 'error' ? (
                     <div className="flex h-full items-center justify-center p-4 text-center">
-                      <p className="text-xs text-red-400">Generation failed</p>
+                      <p className="text-xs text-red-400">{P.generationFailed}</p>
                     </div>
                   ) : img.generated_public_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -308,13 +311,13 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center">
-                      <p className="text-xs text-white/20">Pending</p>
+                      <p className="text-xs text-white/20">{P.pending}</p>
                     </div>
                   )}
                 </div>
                 {/* Labels */}
-                <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">Original</span>
-                <span className="absolute right-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">Generated</span>
+                <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">{P.original}</span>
+                <span className="absolute right-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">{P.generated}</span>
               </div>
 
               {/* Actions */}
@@ -343,7 +346,7 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium ${img.published ? 'text-green-600' : 'text-[#86868b]'}`}>
-                    {img.status === 'generating' ? 'Generating…' : img.status === 'error' ? 'Error' : img.published ? 'Published' : 'Draft'}
+                    {img.status === 'generating' ? P.generating : img.status === 'error' ? P.error : img.published ? P.published : P.draft}
                   </span>
                   <button
                     onClick={() => deleteImage(img.id)}

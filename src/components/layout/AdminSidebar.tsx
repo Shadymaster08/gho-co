@@ -5,19 +5,23 @@ import { usePathname, useRouter } from 'next/navigation'
 import { LayoutDashboard, ShoppingBag, FileText, Receipt, Truck, Images, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-
-const nav = [
-  { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/admin/quotes', label: 'Quotes', icon: FileText },
-  { href: '/admin/invoices', label: 'Invoices', icon: Receipt },
-  { href: '/admin/supplier', label: 'Supplier', icon: Truck },
-  { href: '/admin/portfolio', label: 'Portfolio', icon: Images },
-]
+import { useLocale } from '@/lib/i18n/LocaleContext'
+import { LocaleSwitcherLight } from '@/components/ui/LocaleSwitcher'
 
 export function AdminSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { t } = useLocale()
+  const s = t.admin.sidebar
+
+  const nav = [
+    { href: '/admin', label: s.dashboard, icon: LayoutDashboard, exact: true },
+    { href: '/admin/orders', label: s.orders, icon: ShoppingBag },
+    { href: '/admin/quotes', label: s.quotes, icon: FileText },
+    { href: '/admin/invoices', label: s.invoices, icon: Receipt },
+    { href: '/admin/supplier', label: s.supplier, icon: Truck },
+    { href: '/admin/portfolio', label: s.portfolio, icon: Images },
+  ]
 
   async function signOut() {
     const supabase = createClient()
@@ -60,12 +64,15 @@ export function AdminSidebar() {
 
       <div className="h-px bg-[#d2d2d7] mx-4" />
       <div className="p-3">
+        <div className="mb-1 px-3 py-1">
+          <LocaleSwitcherLight />
+        </div>
         <button
           onClick={signOut}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[#6e6e73] transition-colors hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
         >
           <LogOut className="h-4 w-4" />
-          Sign out
+          {s.signOut}
         </button>
       </div>
     </aside>

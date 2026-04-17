@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate, productTypeLabel } from '@/lib/utils'
 import { Package } from 'lucide-react'
+import { getLocale, t } from '@/lib/i18n'
+import { LocaleSwitcherLight } from '@/components/ui/LocaleSwitcher'
 
 export const metadata = { title: 'My Orders — Gho&Co' }
 
@@ -11,6 +13,10 @@ export default async function PortalPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
+
+  const locale = getLocale()
+  const T = t(locale)
+  const p = T.portal
 
   const { data: orders } = await supabase
     .from('orders')
@@ -21,15 +27,22 @@ export default async function PortalPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
-        <Link href="/#products" className="inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">New order</Link>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">{p.title}</h1>
+          <LocaleSwitcherLight />
+        </div>
+        <Link href="/#products" className="inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">
+          {p.newOrder}
+        </Link>
       </div>
 
       {!orders?.length ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
           <Package className="mb-3 h-12 w-12 text-gray-300" />
-          <p className="text-gray-500">No orders yet</p>
-          <Link href="/#products" className="mt-4 inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">Place your first order</Link>
+          <p className="text-gray-500">{p.noOrders}</p>
+          <Link href="/#products" className="mt-4 inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">
+            {p.placeFirstOrder}
+          </Link>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
