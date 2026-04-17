@@ -22,14 +22,14 @@ export default async function PortalPage() {
     <div className="mx-auto max-w-4xl px-4 py-10">
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">My Orders</h1>
-        <Link href="/" className="inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">New order</Link>
+        <Link href="/#products" className="inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">New order</Link>
       </div>
 
       {!orders?.length ? (
         <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 py-16 text-center">
           <Package className="mb-3 h-12 w-12 text-gray-300" />
           <p className="text-gray-500">No orders yet</p>
-          <Link href="/" className="mt-4 inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">Place your first order</Link>
+          <Link href="/#products" className="mt-4 inline-flex items-center justify-center rounded-full bg-[#0071e3] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#0077ed]">Place your first order</Link>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
