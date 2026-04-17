@@ -7,6 +7,16 @@ import ParticleBackground from './ParticleBackground'
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher'
 import { useLocale } from '@/lib/i18n/LocaleContext'
 
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="0.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 const GRAIN_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`
 
 const PRODUCT_HREFS = ['/order/shirts', '/order/3d-prints', '/order/diy', '/order/lighting']
@@ -29,7 +39,13 @@ const cardVariants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: EASE } },
 }
 
-export default function AnimatedLanding() {
+interface PortfolioImage {
+  id: string
+  generated_public_url: string | null
+  product_type: string | null
+}
+
+export default function AnimatedLanding({ portfolioImages = [] }: { portfolioImages?: PortfolioImage[] }) {
   const { t } = useLocale()
   const l = t.landing
   const nav = t.nav
@@ -57,6 +73,9 @@ export default function AnimatedLanding() {
           <span className="text-base font-semibold tracking-tight text-white">Gho&amp;Co</span>
           <div className="flex items-center gap-3">
             <LocaleSwitcher />
+            <Link href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-white/40 transition-colors hover:text-white">
+              <InstagramIcon className="h-[18px] w-[18px]" />
+            </Link>
             <Link href="/login" className="text-sm text-white/50 transition-colors hover:text-white">
               {nav.login}
             </Link>
@@ -236,6 +255,71 @@ export default function AnimatedLanding() {
         </motion.div>
       </section>
 
+      {/* Portfolio strip */}
+      {portfolioImages.length > 0 && (
+        <>
+          <div className="mx-auto max-w-6xl px-6">
+            <div className="h-px bg-white/[0.06]" />
+          </div>
+          <section className="py-24">
+            <motion.div
+              className="mx-auto max-w-6xl px-6"
+              variants={stagger(0.06)}
+              initial="hidden"
+              whileInView="show"
+              viewport={{ once: true, margin: '-80px' }}
+            >
+              <motion.p variants={fadeUp} className="mb-2 text-xs font-medium uppercase tracking-[0.15em] text-white/30">
+                {l.portfolioStrip.label}
+              </motion.p>
+              <div className="flex items-end justify-between">
+                <motion.h2 variants={fadeUp} className="mb-8 text-3xl font-bold tracking-tighter text-white sm:text-4xl">
+                  {l.portfolioStrip.heading}
+                </motion.h2>
+                <motion.div variants={fadeUp} className="mb-8">
+                  <Link
+                    href="/portfolio"
+                    className="flex items-center gap-1.5 text-sm font-medium text-white/40 transition-all hover:gap-3 hover:text-white"
+                  >
+                    {l.portfolioStrip.cta} <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </motion.div>
+              </div>
+            </motion.div>
+            <div className="flex gap-3 overflow-x-auto px-6 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex gap-3" style={{ paddingLeft: 'max(0px, calc((100vw - 72rem) / 2))' }}>
+                {portfolioImages.map((img, i) => (
+                  <motion.div
+                    key={img.id}
+                    initial={{ opacity: 0, scale: 0.96 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true, margin: '-40px' }}
+                    transition={{ duration: 0.5, delay: i * 0.04, ease: EASE }}
+                    className="relative h-64 w-64 flex-none overflow-hidden rounded-2xl bg-[#141414]"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={img.generated_public_url!}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </motion.div>
+                ))}
+                <div className="flex h-64 w-48 flex-none items-center justify-center">
+                  <Link
+                    href="/portfolio"
+                    className="flex flex-col items-center gap-3 text-center text-white/30 transition-colors hover:text-white/70"
+                  >
+                    <ArrowRight className="h-6 w-6" />
+                    <span className="text-xs font-medium">{l.portfolioStrip.cta}</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
       {/* CTA */}
       <section className="relative overflow-hidden border-t border-white/[0.06] px-6 py-28 text-center">
         <div
@@ -279,7 +363,11 @@ export default function AnimatedLanding() {
       <footer className="border-t border-white/[0.06] px-6 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between text-xs text-white/20">
           <span>{l.footer.copyright.replace('{year}', String(new Date().getFullYear()))}</span>
-          <div className="flex gap-6">
+          <div className="flex items-center gap-6">
+            <Link href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 transition-colors hover:text-white/50">
+              <InstagramIcon className="h-3.5 w-3.5" />
+              {l.footer.instagram}
+            </Link>
             <Link href="/login" className="transition-colors hover:text-white/50">{l.footer.login}</Link>
             <Link href="/portal" className="transition-colors hover:text-white/50">{l.footer.portal}</Link>
           </div>

@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
-import { Upload, Loader2, Eye, EyeOff, Trash2, Copy, Check, X, CheckSquare, Square } from 'lucide-react'
+import { Upload, Loader2, Eye, EyeOff, Trash2, Copy, Check, X, CheckSquare, Square, Crop } from 'lucide-react'
 import { useLocale } from '@/lib/i18n/LocaleContext'
+
+const LightingCropModal = dynamic(() => import('./LightingCropModal'), { ssr: false })
 
 interface PortfolioImage {
   id: string
@@ -25,8 +28,10 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
   const [preview, setPreview] = useState<string | null>(null)
   const [productType, setProductType] = useState('shirt')
   const [shirtSide, setShirtSide] = useState<'front' | 'back'>('front')
+  const [shirtStyle, setShirtStyle] = useState<'tshirt' | 'longsleeve' | 'crewneck' | 'hoodie'>('tshirt')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [cropTarget, setCropTarget] = useState<{ id: string; originalUrl: string } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const productTypes = [
@@ -59,27 +64,35 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
           created_at: new Date().toISOString(),
         }, ...prev])
 
-        // Trigger enhancement (non-blocking — update status when done)
-        fetch('/api/agents/image-enhance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ portfolioImageId: id, productType, shirtSide: productType === 'shirt' ? shirtSide : undefined }),
-        }).then(async (res) => {
-          const data = await res.json()
-          if (data.generated_public_url) {
-            setImages(prev => prev.map(img =>
-              img.id === id
-                ? { ...img, status: 'done', generated_public_url: data.generated_public_url }
-                : img
-            ))
-            toast.success(P.generatedSuccess)
-          } else {
-            setImages(prev => prev.map(img =>
-              img.id === id ? { ...img, status: 'error' } : img
-            ))
-            toast.error(P.generationError + (data.error ?? 'Unknown error'))
-          }
-        })
+        if (productType === 'lighting') {
+          // Lighting: skip AI — show crop modal with blob URL
+          setImages(prev => prev.map(img =>
+            img.id === id ? { ...img, status: 'pending' } : img
+          ))
+          setCropTarget({ id, originalUrl: URL.createObjectURL(file) })
+        } else {
+          // Trigger enhancement (non-blocking — update status when done)
+          fetch('/api/agents/image-enhance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portfolioImageId: id, productType, shirtSide: productType === 'shirt' ? shirtSide : undefined, shirtStyle: productType === 'shirt' ? shirtStyle : undefined }),
+          }).then(async (res) => {
+            const data = await res.json()
+            if (data.generated_public_url) {
+              setImages(prev => prev.map(img =>
+                img.id === id
+                  ? { ...img, status: 'done', generated_public_url: data.generated_public_url }
+                  : img
+              ))
+              toast.success(P.generatedSuccess)
+            } else {
+              setImages(prev => prev.map(img =>
+                img.id === id ? { ...img, status: 'error' } : img
+              ))
+              toast.error(P.generationError + (data.error ?? 'Unknown error'))
+            }
+          })
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Upload failed')
       }
@@ -151,6 +164,14 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
     }
   }
 
+  function handleCropConfirm(id: string, generatedUrl: string) {
+    setImages(prev => prev.map(img =>
+      img.id === id ? { ...img, status: 'done', generated_public_url: generatedUrl } : img
+    ))
+    setCropTarget(null)
+    toast.success(P.generatedSuccess)
+  }
+
   async function copyUrl(url: string, id: string) {
     await navigator.clipboard.writeText(url)
     setCopied(id)
@@ -159,6 +180,21 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
 
   return (
     <div>
+      {/* Crop modal */}
+      {cropTarget && (
+        <LightingCropModal
+          portfolioImageId={cropTarget.id}
+          imageUrl={cropTarget.originalUrl}
+          onConfirm={handleCropConfirm}
+          onClose={() => {
+            setImages(prev => prev.map(img =>
+              img.id === cropTarget.id && img.status === 'pending' ? { ...img, status: 'error' } : img
+            ))
+            setCropTarget(null)
+          }}
+        />
+      )}
+
       {/* Lightbox */}
       {preview && (
         <div
@@ -216,7 +252,30 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
         ))}
       </div>
 
-      {/* Front / Back toggle for shirts */}
+      {/* Shirt style + front/back */}
+      {productType === 'shirt' && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {([
+            { value: 'tshirt', label: 'T-Shirt', emoji: '👕' },
+            { value: 'longsleeve', label: 'Long Sleeve', emoji: '🧥' },
+            { value: 'crewneck', label: 'Crewneck', emoji: '🔵' },
+            { value: 'hoodie', label: 'Hoodie', emoji: '🧤' },
+          ] as const).map(s => (
+            <button
+              key={s.value}
+              onClick={() => setShirtStyle(s.value)}
+              className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
+                shirtStyle === s.value
+                  ? 'border-[#0071e3] bg-[#0071e3]/5 text-[#0071e3]'
+                  : 'border-[#d2d2d7] text-[#6e6e73] hover:border-[#6e6e73]'
+              }`}
+            >
+              <span>{s.emoji}</span> {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {productType === 'shirt' && (
         <div className="mb-4 flex gap-2">
           {(['front', 'back'] as const).map(side => (
@@ -339,6 +398,15 @@ export default function PortfolioClient({ initial }: { initial: PortfolioImage[]
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] transition-colors hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
                         >
                           {copied === img.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      )}
+                      {img.product_type === 'lighting' && (
+                        <button
+                          onClick={() => setCropTarget({ id: img.id, originalUrl: img.original_public_url })}
+                          title="Edit crop"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] transition-colors hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                        >
+                          <Crop className="h-4 w-4" />
                         </button>
                       )}
                     </>

@@ -48,10 +48,16 @@ export const translations = {
         { title: 'Receive your quote', desc: 'We review your request and send a detailed quote within 24 hours.' },
         { title: 'We build it', desc: 'Once approved, production begins. Track every step through your portal.' },
       ],
+      portfolioStrip: {
+        label: 'Recent work',
+        heading: 'Fresh off the bench.',
+        cta: 'View full portfolio',
+      },
       footer: {
         copyright: '© {year} Gho&Co',
         login: 'Login',
         portal: 'Portal',
+        instagram: 'Instagram',
       },
     },
     auth: {
@@ -256,10 +262,16 @@ export const translations = {
         { title: 'Recevez votre devis', desc: 'Nous examinons votre demande et envoyons un devis détaillé sous 24 heures.' },
         { title: 'Nous le fabriquons', desc: 'Une fois approuvé, la production commence. Suivez chaque étape via votre portail.' },
       ],
+      portfolioStrip: {
+        label: 'Réalisations récentes',
+        heading: 'Tout juste sorti de l\'atelier.',
+        cta: 'Voir le portfolio complet',
+      },
       footer: {
         copyright: '© {year} Gho&Co',
         login: 'Connexion',
         portal: 'Portail',
+        instagram: 'Instagram',
       },
     },
     auth: {

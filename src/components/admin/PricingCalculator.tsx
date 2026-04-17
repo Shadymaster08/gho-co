@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
-import { Calculator, ExternalLink } from 'lucide-react'
+import { Calculator, ExternalLink, Upload, Loader2, TrendingUp, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 
 // 35% gross margin → multiplier = 1 / (1 - 0.35)
@@ -191,6 +191,9 @@ function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
         ]}
         suggestedCents={suggestedPriceCents}
         profitCentsVal={result.profitCents}
+        productType="shirt"
+        description={result.description}
+        quantity={quantity}
         unitLabel={`$${(unitSuggestedCents / 100).toFixed(2)}/shirt`}
         onApply={onApply ? () => onApply(result) : undefined}
       />
@@ -200,15 +203,60 @@ function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
 
 // ── 3D Print Calculator ─────────────────────────────────────────────────────
 
+interface SlicerData {
+  print_time_minutes: number | null
+  filament_weight_g: number | null
+  filament_cost_dollars: number | null
+  filament_type: string | null
+  model_name: string | null
+  notes: string | null
+}
+
 function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
   const [material, setMaterial] = useState('PLA (Bambu)')
   const [weightG, setWeightG] = useState(100)
+  const [printTimeMin, setPrintTimeMin] = useState(60)
   const [quantity, setQuantity] = useState(1)
   const [otherCost, setOtherCost] = useState(0)
+  const [scanning, setScanning] = useState(false)
+  const [slicerData, setSlicerData] = useState<SlicerData | null>(null)
+  const [screenshots, setScreenshots] = useState<{ name: string; url: string }[]>([])
+  const fileRef = useRef<HTMLInputElement>(null)
 
+  async function handleScreenshot(files: FileList | null) {
+    if (!files?.length) return
+    setScanning(true)
+    // Show preview thumbnails
+    const newScreenshots = Array.from(files).map(f => ({ name: f.name, url: URL.createObjectURL(f) }))
+    setScreenshots(prev => [...prev, ...newScreenshots])
+
+    // Scan the first file with Claude Vision
+    const form = new FormData()
+    form.append('screenshot', files[0])
+    try {
+      const res = await fetch('/api/agents/slicer-scan', { method: 'POST', body: form })
+      const data: SlicerData = await res.json()
+      if (res.ok) {
+        setSlicerData(data)
+        // Auto-fill fields from scan
+        if (data.filament_weight_g) setWeightG(data.filament_weight_g)
+        if (data.print_time_minutes) setPrintTimeMin(data.print_time_minutes)
+        if (data.filament_type) {
+          const match = Object.keys(FILAMENT_COSTS).find(k =>
+            k.toLowerCase().includes(data.filament_type!.toLowerCase())
+          )
+          if (match) setMaterial(match)
+        }
+      }
+    } catch {}
+    setScanning(false)
+  }
+
+  // Electricity: ~$0.10/kWh, printer ~300W → $0.03/hr
+  const electricityCost = (printTimeMin / 60) * 0.03
   const pricePerKg = FILAMENT_COSTS[material] ?? 25
   const filamentCost = (weightG / 1000) * pricePerKg
-  const totalMaterialCost = (filamentCost + otherCost) * quantity
+  const totalMaterialCost = (filamentCost + electricityCost + otherCost) * quantity
   const totalMaterialCents = Math.round(totalMaterialCost * 100)
   const suggestedPriceCents = applyMargin(totalMaterialCents)
 
@@ -216,7 +264,7 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
     materialCostCents: totalMaterialCents,
     suggestedPriceCents,
     profitCents: profitCents(totalMaterialCents, suggestedPriceCents),
-    description: `3D Print ×${quantity} — ${material} ${weightG}g each`,
+    description: `3D Print ×${quantity} — ${material} ~${weightG}g each, ~${Math.round(printTimeMin / 60 * 10) / 10}h print`,
   }
 
   return (
@@ -224,6 +272,59 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
       <SupplierLinks
         links={[{ label: 'Bambu Lab Filament Store', href: 'https://ca.store.bambulab.com/collections/bambu-lab-3d-printer-filament' }]}
       />
+
+      {/* Slicer screenshot upload */}
+      <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-semibold text-indigo-700">Slicer screenshots (optional — auto-fills fields)</p>
+          {scanning && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+          {slicerData && !scanning && <CheckCircle className="h-4 w-4 text-green-500" />}
+        </div>
+
+        {/* Screenshot thumbnails */}
+        {screenshots.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {screenshots.map((s, i) => (
+              <div key={i} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.url} alt={s.name} className="h-16 w-24 rounded-lg border border-indigo-200 object-cover" />
+                <p className="mt-0.5 max-w-[96px] truncate text-[10px] text-indigo-500">{s.name}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {slicerData && (
+          <div className="mb-3 rounded-lg bg-white border border-indigo-100 px-3 py-2 text-xs text-indigo-800">
+            <p className="font-semibold mb-1">Extracted from screenshot:</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+              {slicerData.print_time_minutes && <span>Print time: <strong>{Math.floor(slicerData.print_time_minutes / 60)}h {slicerData.print_time_minutes % 60}m</strong></span>}
+              {slicerData.filament_weight_g && <span>Weight: <strong>{slicerData.filament_weight_g}g</strong></span>}
+              {slicerData.filament_type && <span>Material: <strong>{slicerData.filament_type}</strong></span>}
+              {slicerData.filament_cost_dollars && <span>Slicer cost est.: <strong>${slicerData.filament_cost_dollars.toFixed(2)}</strong></span>}
+              {slicerData.model_name && <span className="col-span-2">Model: <strong>{slicerData.model_name}</strong></span>}
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={scanning}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white py-2 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50 disabled:opacity-50"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {scanning ? 'Scanning…' : screenshots.length > 0 ? 'Add more screenshots' : 'Upload slicer screenshot'}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={e => handleScreenshot(e.target.files)}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <CalcField label="Filament type">
@@ -233,13 +334,16 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
             ))}
           </select>
         </CalcField>
-        <CalcField label="Estimated weight per unit (grams)">
+        <CalcField label="Weight per unit (grams)">
           <input type="number" min={1} value={weightG} onChange={e => setWeightG(+e.target.value || 1)} className={inputCls} />
+        </CalcField>
+        <CalcField label="Print time per unit (minutes)">
+          <input type="number" min={1} value={printTimeMin} onChange={e => setPrintTimeMin(+e.target.value || 1)} className={inputCls} />
         </CalcField>
         <CalcField label="Quantity">
           <input type="number" min={1} value={quantity} onChange={e => setQuantity(+e.target.value || 1)} className={inputCls} />
         </CalcField>
-        <CalcField label="Other costs per unit ($ — time, electricity, post-processing)">
+        <CalcField label="Other costs per unit ($ — post-processing, supports, etc.)">
           <input type="number" min={0} step={0.50} value={otherCost} onChange={e => setOtherCost(+e.target.value || 0)} className={inputCls} />
         </CalcField>
       </div>
@@ -247,11 +351,15 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
       <ResultCard
         rows={[
           { label: `Filament (${weightG}g × ${quantity} @ $${pricePerKg}/kg)`, value: `$${(filamentCost * quantity).toFixed(2)}` },
+          { label: `Electricity (~${Math.round(printTimeMin / 60 * 10) / 10}h × $0.03/hr × ${quantity})`, value: `$${(electricityCost * quantity).toFixed(2)}` },
           { label: `Other costs (×${quantity})`, value: `$${(otherCost * quantity).toFixed(2)}` },
-          { label: 'Total material cost', value: formatCurrency(totalMaterialCents), bold: true },
+          { label: 'Total cost', value: formatCurrency(totalMaterialCents), bold: true },
         ]}
         suggestedCents={suggestedPriceCents}
         profitCentsVal={result.profitCents}
+        productType="3d_print"
+        description={result.description}
+        quantity={quantity}
         onApply={onApply ? () => onApply(result) : undefined}
       />
     </div>
@@ -304,6 +412,9 @@ function CustomCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
           ]}
           suggestedCents={suggestedPriceCents}
           profitCentsVal={result.profitCents}
+          productType="diy"
+          description={description || 'Custom project'}
+          quantity={1}
           onApply={onApply ? () => onApply(result) : undefined}
         />
       )}
@@ -380,15 +491,52 @@ const tiers = [
   },
 ] as const
 
+interface MarketData {
+  market_low_cents: number
+  market_mid_cents: number
+  market_high_cents: number
+  assessment: 'underpriced' | 'competitive' | 'premium' | 'unknown'
+  assessment_note: string
+  reasoning: string
+  tips: string[]
+}
+
 function ResultCard({
-  rows, suggestedCents, profitCentsVal, unitLabel, onApply,
+  rows, suggestedCents, profitCentsVal, productType, description, quantity, unitLabel, onApply,
 }: {
   rows: ResultRow[]
   suggestedCents: number
   profitCentsVal: number
+  productType: string
+  description: string
+  quantity: number
   unitLabel?: string
   onApply?: () => void
 }) {
+  const [market, setMarket] = useState<MarketData | null>(null)
+  const [loadingMarket, setLoadingMarket] = useState(false)
+
+  async function fetchMarket() {
+    setLoadingMarket(true)
+    try {
+      const res = await fetch('/api/agents/market-pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ product_type: productType, description, quantity, our_price_cents: suggestedCents }),
+      })
+      if (res.ok) setMarket(await res.json())
+    } catch {}
+    setLoadingMarket(false)
+  }
+
+  const assessmentStyle: Record<string, { color: string; icon: React.ReactNode }> = {
+    underpriced:  { color: 'text-amber-700 bg-amber-50 border-amber-200', icon: <AlertTriangle className="h-3.5 w-3.5" /> },
+    competitive:  { color: 'text-green-700 bg-green-50 border-green-200',  icon: <CheckCircle className="h-3.5 w-3.5" /> },
+    premium:      { color: 'text-indigo-700 bg-indigo-50 border-indigo-200', icon: <TrendingUp className="h-3.5 w-3.5" /> },
+    unknown:      { color: 'text-gray-600 bg-gray-50 border-gray-200',    icon: null },
+  }
+  const aStyle = assessmentStyle[market?.assessment ?? 'unknown']
+
   return (
     <div className="rounded-lg border border-indigo-200 bg-white p-4">
       {/* Cost breakdown */}
@@ -415,11 +563,6 @@ function ResultCard({
                 <span className="mb-1 text-base">{tier.icon}</span>
                 <p className={`text-[11px] font-semibold leading-tight ${tier.text}`}>{tier.label}</p>
                 <p className={`mt-1 text-sm font-bold ${tier.text}`}>{formatCurrency(priceCents)}</p>
-                {unitLabel && (
-                  <p className="mt-0.5 text-[10px] text-gray-400">
-                    ≈ {formatCurrency(Math.round(priceCents / (suggestedCents / (suggestedCents / suggestedCents))))}
-                  </p>
-                )}
                 <span className={`mt-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${tier.badge}`}>
                   {tier.note}
                 </span>
@@ -428,12 +571,91 @@ function ResultCard({
           })}
         </div>
 
-        {/* Profit at recommended */}
         <p className="mt-2 text-center text-xs text-green-700">
           Profit at recommended: {formatCurrency(profitCentsVal)} ({(MARGIN * 100).toFixed(0)}% margin)
         </p>
         {unitLabel && (
           <p className="mt-0.5 text-center text-xs text-gray-400">≈ {unitLabel} at recommended price</p>
+        )}
+      </div>
+
+      {/* Market pricing panel */}
+      <div className="mt-4 border-t border-dashed border-indigo-200 pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Canadian market rates</p>
+          <button
+            type="button"
+            onClick={fetchMarket}
+            disabled={loadingMarket}
+            className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 border border-indigo-200 transition-colors"
+          >
+            {loadingMarket
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> Analyzing…</>
+              : <><Sparkles className="h-3 w-3" /> {market ? 'Refresh' : 'Get market rates'}</>
+            }
+          </button>
+        </div>
+
+        {market && (
+          <div className="flex flex-col gap-3">
+            {/* Assessment badge */}
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium ${aStyle.color}`}>
+              {aStyle.icon}
+              <span className="capitalize font-semibold">{market.assessment}:</span>
+              <span className="font-normal">{market.assessment_note}</span>
+            </div>
+
+            {/* Market range bar */}
+            <div>
+              <p className="mb-1.5 text-[11px] text-gray-500">Market range (CAD)</p>
+              <div className="relative h-7 rounded-full bg-gray-100">
+                {/* Market range fill */}
+                {(() => {
+                  const min = market.market_low_cents
+                  const max = market.market_high_cents
+                  const range = max - min || 1
+                  const ourPct = Math.min(100, Math.max(0, ((suggestedCents - min) / range) * 100))
+                  const lowPct = 0
+                  const highPct = 100
+                  return (
+                    <>
+                      <div className="absolute inset-y-0 left-0 right-0 rounded-full overflow-hidden">
+                        <div className="h-full w-full bg-gradient-to-r from-amber-100 via-green-100 to-indigo-100 rounded-full" />
+                      </div>
+                      {/* Our price marker */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-5 w-1.5 rounded-full bg-indigo-600 shadow"
+                        style={{ left: `${ourPct}%` }}
+                        title={`Our price: ${formatCurrency(suggestedCents)}`}
+                      />
+                      {/* Labels */}
+                      <div className="absolute inset-y-0 left-2 flex items-center text-[10px] text-gray-500">
+                        {formatCurrency(min)}
+                      </div>
+                      <div className="absolute inset-y-0 right-2 flex items-center text-[10px] text-gray-500">
+                        {formatCurrency(max)}
+                      </div>
+                    </>
+                  )
+                })()}
+              </div>
+              <div className="mt-1 text-center text-[10px] text-gray-400">
+                Market mid: {formatCurrency(market.market_mid_cents)} · Our price: {formatCurrency(suggestedCents)}
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">{market.reasoning}</p>
+
+            {market.tips?.length > 0 && (
+              <ul className="flex flex-col gap-1">
+                {market.tips.map((tip, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-500">
+                    <span className="mt-0.5 text-indigo-400">→</span>{tip}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
 

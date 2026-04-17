@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { portfolioImageId, productType, shirtSide } = await request.json()
+  const { portfolioImageId, productType, shirtSide, shirtStyle } = await request.json()
   if (!portfolioImageId) return NextResponse.json({ error: 'portfolioImageId required' }, { status: 400 })
 
   const service = createServiceClient()
@@ -105,9 +105,17 @@ export async function POST(request: Request) {
       }
     }
 
+    const SHIRT_STYLE_LABELS: Record<string, string> = {
+      tshirt: 'short-sleeve T-shirt',
+      longsleeve: 'long-sleeve T-shirt',
+      crewneck: 'crewneck sweatshirt',
+      hoodie: 'pullover hoodie',
+    }
     let basePrompt = PROMPTS[productType] ?? PROMPTS.default
-    if (productType === 'shirt' && shirtSide) {
-      basePrompt = `The input photo shows the ${shirtSide} of the garment. Preserve this exact view — do not rotate, flip or show the other side. ` + basePrompt
+    if (productType === 'shirt') {
+      const styleLabel = shirtStyle ? SHIRT_STYLE_LABELS[shirtStyle] ?? shirtStyle : 'garment'
+      const sideLabel = shirtSide ?? 'front'
+      basePrompt = `This is the ${sideLabel} of a ${styleLabel}. Preserve this exact view — do not rotate, flip or show the other side. ` + basePrompt
     }
     const fullPrompt = productDescription !== 'a custom product'
       ? `${basePrompt} The product is: ${productDescription}.`

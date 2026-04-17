@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { FollowUpFlags } from '@/components/admin/FollowUpFlags'
+import { ProfitEstimator } from '@/components/admin/ProfitEstimator'
 import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 
 export const metadata = { title: 'Dashboard — Gho&Co Admin' }
@@ -56,6 +57,12 @@ export default async function AdminDashboardPage() {
       {/* Follow-up flags */}
       <div className="mb-8">
         <FollowUpFlags />
+      </div>
+
+      {/* Profit Estimator */}
+      <div className="mb-8">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900">Profit & Margin</h2>
+        <ProfitEstimator />
       </div>
 
       {/* Recent Orders */}
