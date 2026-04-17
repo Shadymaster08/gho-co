@@ -45,8 +45,7 @@ export default function RegisterPage() {
     }
 
     toast.success('Account created! Welcome.')
-    router.push('/portal')
-    router.refresh()
+    window.location.href = '/portal'
   }
 
   return (
