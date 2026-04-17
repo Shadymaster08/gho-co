@@ -5,7 +5,7 @@ import Replicate from 'replicate'
 import { v4 as uuidv4 } from 'uuid'
 
 const PROMPTS: Record<string, string> = {
-  shirt: `This is a clothing product photo. Remove the background completely — replace with pure white (#ffffff). Remove any person, hanger, mannequin, props, or surface. Show only the garment itself centred on solid white. Do not add anything new. Keep every graphic, print, text and colour on the garment exactly as it appears in the original. Soft even studio lighting, no shadows. Clean white-background apparel product photo.`,
+  shirt: `Product photo cleanup. Replace the background with pure white (#ffffff). Remove any person, hanger, mannequin, surface, or props — leave only the garment. Do not rotate, flip or reposition the garment in any way — preserve its exact orientation from the original photo. Keep every print, graphic, text, colour and detail on the garment pixel-perfect. The garment should be vertically centred and fill roughly 80% of the frame height, with equal white space on left and right. Soft even diffused lighting, no shadows, no gradients. The result must look identical in framing and scale to other shirts in the same product line.`,
 
   '3d_print': `Keep the 3D printed object exactly as it is — do not alter its shape, color or details. Replace the background with a clean soft off-white surface. Place the object on a smooth matte light surface with a very subtle shadow underneath. Stylised product photography: strong directional key light from upper left casting a gentle dramatic shadow, warm rim light from behind adding depth, soft fill to avoid pure black. The lighting should feel editorial and moody while keeping the object clearly readable. Sharp focus on all details and layer lines.`,
 
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     let basePrompt = PROMPTS[productType] ?? PROMPTS.default
     if (productType === 'shirt' && shirtSide) {
-      basePrompt = `Show only the ${shirtSide} of the garment facing the camera. Do not flip or rotate the garment. ` + basePrompt
+      basePrompt = `The input photo shows the ${shirtSide} of the garment. Preserve this exact view — do not rotate, flip or show the other side. ` + basePrompt
     }
     const fullPrompt = productDescription !== 'a custom product'
       ? `${basePrompt} The product is: ${productDescription}.`
