@@ -5,11 +5,11 @@ import Replicate from 'replicate'
 import { v4 as uuidv4 } from 'uuid'
 
 const PROMPTS: Record<string, string> = {
-  shirt: `Remove any people or humans entirely from this image. Keep only the clothing item (shirt, hoodie, crewneck, or jacket) exactly as it is. Remove the background completely — replace with pure white (#ffffff). No hanger, no surface, no shadow, no props. The garment floats on solid white. Garment must be fully visible, unwrinkled, and centred. All printed graphics, text and embroidery must remain sharp and readable. Clean flat-lay or ghost-mannequin style product photo.`,
+  shirt: `This is a clothing product photo. Remove the background completely — replace with pure white (#ffffff). Remove any person, hanger, mannequin, props, or surface. Show only the garment itself centred on solid white. Do not add anything new. Keep every graphic, print, text and colour on the garment exactly as it appears in the original. Soft even studio lighting, no shadows. Clean white-background apparel product photo.`,
 
   '3d_print': `Keep the 3D printed object exactly as it is — do not alter its shape, color or details. Replace the background with a clean soft off-white surface. Place the object on a smooth matte light surface with a very subtle shadow underneath. Stylised product photography: strong directional key light from upper left casting a gentle dramatic shadow, warm rim light from behind adding depth, soft fill to avoid pure black. The lighting should feel editorial and moody while keeping the object clearly readable. Sharp focus on all details and layer lines.`,
 
-  lighting: `Keep the lighting product exactly as it is — do not alter its shape, housing, cables, LEDs, diffusers or any physical details. Place it on a smooth dark surface that creates a clean mirror-like reflection beneath the product. The environment is a near-black studio (#0d0d0d). The product's own light emission is the only light source: LEDs, strips, or bulbs glow naturally with their authentic colour and intensity. Do not add external studio lights or artificial glows beyond what the product itself produces. The product housing remains crisp and sharp. Atmosphere fades naturally from the product's glow into darkness. Ultra-premium product photography, Apple-style studio presentation, high-end lighting brand catalog.`,
+  lighting: `Clean up this lighting product photo into a high-end commercial image. Remove any cables, wires, or cords from the scene entirely. Replace the background with a very dark charcoal grey (#1a1a1a) — not pure black, so depth is visible. The product sits on a smooth dark reflective surface with a subtle clean reflection underneath. The product itself should be well-lit and clearly visible — bright enough to see all its details, textures and materials. Its LEDs or light strips glow with their natural colour. Soft fill light keeps the product readable without washing out the glow. Premium product catalog look — think high-end interior brand or architectural lighting showroom.`,
 
   default: `Keep the product exactly as it is. Replace only the background with a pure white studio background. Add professional soft diffused overhead lighting, no harsh shadows. Tilt the product slightly at a diagonal angle. Clean editorial lookbook style. Product details must remain sharp and readable.`,
 }
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
 
     let basePrompt = PROMPTS[productType] ?? PROMPTS.default
     if (productType === 'shirt' && shirtSide) {
-      basePrompt += ` This is the ${shirtSide} of the garment — make sure the ${shirtSide} is facing forward and fully visible.`
+      basePrompt = `Show only the ${shirtSide} of the garment facing the camera. Do not flip or rotate the garment. ` + basePrompt
     }
     const fullPrompt = productDescription !== 'a custom product'
       ? `${basePrompt} The product is: ${productDescription}.`
