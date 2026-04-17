@@ -76,9 +76,9 @@ export async function POST(request: Request) {
     const output = await replicate.run('black-forest-labs/flux-1.1-pro', {
       input: {
         prompt: fullPrompt,
-        image: row.original_public_url,
+        image_prompt: row.original_public_url,
         prompt_upsampling: true,
-        image_prompt_strength: 0.15,
+        image_prompt_strength: 0.3,
         aspect_ratio: '1:1',
         output_format: 'webp',
         output_quality: 90,
@@ -86,8 +86,15 @@ export async function POST(request: Request) {
       },
     })
 
-    // output is a URL string or ReadableStream
-    const generatedUrl = typeof output === 'string' ? output : (output as unknown as { url: () => Promise<URL> }).url ? await (output as unknown as { url: () => Promise<URL> }).url() : String(output)
+    // output is a URL string or ReadableStream from Replicate
+    let generatedUrl: string
+    if (typeof output === 'string') {
+      generatedUrl = output
+    } else if (output && typeof (output as { url?: () => Promise<URL> }).url === 'function') {
+      generatedUrl = String(await (output as { url: () => Promise<URL> }).url())
+    } else {
+      generatedUrl = String(output)
+    }
 
     // Step 4: Download result and re-upload to our Supabase storage
     const genRes = await fetch(String(generatedUrl))
