@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { getLocale, t } from '@/lib/i18n'
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher'
@@ -12,7 +12,7 @@ export const metadata = {
 }
 
 export default async function PortfolioPage() {
-  const supabase = createClient()
+  const supabase = createServiceClient()
   const locale = getLocale()
   const T = t(locale)
   const p = T.portfolio
