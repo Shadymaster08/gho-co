@@ -3,13 +3,12 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import Replicate from 'replicate'
 import { v4 as uuidv4 } from 'uuid'
+import sharp from 'sharp'
 
 const PROMPTS: Record<string, string> = {
   shirt: `Product photo cleanup. Replace the background with pure white (#ffffff). Remove any person, hanger, mannequin, surface, or props — leave only the garment. Do not rotate, flip or reposition the garment in any way — preserve its exact orientation from the original photo. Keep every print, graphic, text, colour and detail on the garment pixel-perfect. The garment should be vertically centred and fill roughly 80% of the frame height, with equal white space on left and right. Soft even diffused lighting, no shadows, no gradients. The result must look identical in framing and scale to other shirts in the same product line.`,
 
   '3d_print': `Keep the 3D printed object exactly as it is — do not alter its shape, color or details. Replace the background with a clean soft off-white surface. Place the object on a smooth matte light surface with a very subtle shadow underneath. Stylised product photography: strong directional key light from upper left casting a gentle dramatic shadow, warm rim light from behind adding depth, soft fill to avoid pure black. The lighting should feel editorial and moody while keeping the object clearly readable. Sharp focus on all details and layer lines.`,
-
-  lighting: `Clean up this lighting product photo into a high-end commercial image. Remove any cables, wires, or cords from the scene entirely. Replace the background with a very dark charcoal grey (#1a1a1a) — not pure black, so depth is visible. The product sits on a smooth dark reflective surface with a subtle clean reflection underneath. The product itself should be well-lit and clearly visible — bright enough to see all its details, textures and materials. Its LEDs or light strips glow with their natural colour. Soft fill light keeps the product readable without washing out the glow. Premium product catalog look — think high-end interior brand or architectural lighting showroom.`,
 
   default: `Keep the product exactly as it is. Replace only the background with a pure white studio background. Add professional soft diffused overhead lighting, no harsh shadows. Tilt the product slightly at a diagonal angle. Clean editorial lookbook style. Product details must remain sharp and readable.`,
 }
@@ -42,6 +41,35 @@ export async function POST(request: Request) {
     .eq('id', portfolioImageId)
 
   try {
+    // Lighting: skip AI entirely — just crop to a consistent square
+    if (productType === 'lighting') {
+      const imageRes = await fetch(row.original_public_url)
+      if (!imageRes.ok) throw new Error('Failed to fetch original image')
+      const imageBuffer = Buffer.from(await imageRes.arrayBuffer())
+
+      const croppedBuffer = await sharp(imageBuffer)
+        .resize(1200, 1200, { fit: 'cover', position: 'centre' })
+        .jpeg({ quality: 92 })
+        .toBuffer()
+
+      const genPath = `generated/${uuidv4()}.jpg`
+      const { error: storageErr } = await service.storage
+        .from('portfolio')
+        .upload(genPath, croppedBuffer, { contentType: 'image/jpeg', upsert: false })
+      if (storageErr) throw new Error(`Storage upload failed: ${storageErr.message}`)
+
+      const { data: { publicUrl: genPublicUrl } } = service.storage
+        .from('portfolio')
+        .getPublicUrl(genPath)
+
+      await service
+        .from('portfolio_images')
+        .update({ status: 'done', generated_storage_path: genPath, generated_public_url: genPublicUrl, prompt_used: 'crop:1200x1200' })
+        .eq('id', portfolioImageId)
+
+      return NextResponse.json({ generated_public_url: genPublicUrl })
+    }
+
     // Step 1: Fetch image as base64 for Claude Vision
     const imageRes = await fetch(row.original_public_url)
     if (!imageRes.ok) throw new Error('Failed to fetch original image')
