@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, ShoppingBag, FileText, Receipt, Truck, LogOut } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, FileText, Receipt, Truck, Images, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
@@ -12,6 +12,7 @@ const nav = [
   { href: '/admin/quotes', label: 'Quotes', icon: FileText },
   { href: '/admin/invoices', label: 'Invoices', icon: Receipt },
   { href: '/admin/supplier', label: 'Supplier', icon: Truck },
+  { href: '/admin/portfolio', label: 'Portfolio', icon: Images },
 ]
 
 export function AdminSidebar() {

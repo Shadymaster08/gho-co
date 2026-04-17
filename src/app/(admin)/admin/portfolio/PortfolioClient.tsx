@@ -1,0 +1,214 @@
+'use client'
+
+import { useState, useRef } from 'react'
+import { toast } from 'sonner'
+import { Upload, Loader2, Eye, EyeOff, Trash2, Copy, Check } from 'lucide-react'
+
+interface PortfolioImage {
+  id: string
+  title: string | null
+  product_type: string | null
+  original_public_url: string
+  generated_public_url: string | null
+  status: string
+  published: boolean
+  created_at: string
+}
+
+export default function PortfolioClient({ initial }: { initial: PortfolioImage[] }) {
+  const [images, setImages] = useState<PortfolioImage[]>(initial)
+  const [uploading, setUploading] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFiles(files: FileList | null) {
+    if (!files?.length) return
+    setUploading(true)
+    for (const file of Array.from(files)) {
+      try {
+        // Upload original
+        const form = new FormData()
+        form.append('file', file)
+        const upRes = await fetch('/api/portfolio/upload', { method: 'POST', body: form })
+        if (!upRes.ok) throw new Error((await upRes.json()).error)
+        const { id } = await upRes.json()
+
+        // Add pending row immediately
+        setImages(prev => [{
+          id,
+          title: null,
+          product_type: null,
+          original_public_url: URL.createObjectURL(file),
+          generated_public_url: null,
+          status: 'generating',
+          published: false,
+          created_at: new Date().toISOString(),
+        }, ...prev])
+
+        // Trigger enhancement (non-blocking — update status when done)
+        fetch('/api/agents/image-enhance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ portfolioImageId: id }),
+        }).then(async (res) => {
+          const data = await res.json()
+          if (data.generated_public_url) {
+            setImages(prev => prev.map(img =>
+              img.id === id
+                ? { ...img, status: 'done', generated_public_url: data.generated_public_url }
+                : img
+            ))
+            toast.success('Image generated!')
+          } else {
+            setImages(prev => prev.map(img =>
+              img.id === id ? { ...img, status: 'error' } : img
+            ))
+            toast.error('Generation failed: ' + (data.error ?? 'Unknown error'))
+          }
+        })
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Upload failed')
+      }
+    }
+    setUploading(false)
+  }
+
+  async function togglePublish(img: PortfolioImage) {
+    const next = !img.published
+    const res = await fetch('/api/portfolio', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: img.id, published: next }),
+    })
+    if (res.ok) {
+      setImages(prev => prev.map(i => i.id === img.id ? { ...i, published: next } : i))
+      toast.success(next ? 'Published to portfolio' : 'Unpublished')
+    }
+  }
+
+  async function deleteImage(id: string) {
+    if (!confirm('Delete this image?')) return
+    const res = await fetch('/api/portfolio', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (res.ok) {
+      setImages(prev => prev.filter(i => i.id !== id))
+      toast.success('Deleted')
+    }
+  }
+
+  async function copyUrl(url: string, id: string) {
+    await navigator.clipboard.writeText(url)
+    setCopied(id)
+    setTimeout(() => setCopied(null), 2000)
+  }
+
+  return (
+    <div>
+      {/* Upload zone */}
+      <div
+        className="mb-8 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[#d2d2d7] bg-[#fafafa] py-12 transition-colors hover:border-[#0071e3] hover:bg-blue-50/30"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files) }}
+      >
+        {uploading ? (
+          <Loader2 className="h-8 w-8 animate-spin text-[#0071e3]" />
+        ) : (
+          <Upload className="h-8 w-8 text-[#86868b]" />
+        )}
+        <p className="mt-3 text-sm font-medium text-[#1d1d1f]">
+          {uploading ? 'Uploading…' : 'Drop product photos here, or tap to select'}
+        </p>
+        <p className="mt-1 text-xs text-[#86868b]">JPEG, PNG, WebP, HEIC — multiple files supported</p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+          multiple
+          className="hidden"
+          onChange={e => handleFiles(e.target.files)}
+        />
+      </div>
+
+      {/* Grid */}
+      {images.length === 0 ? (
+        <p className="text-center text-sm text-[#86868b]">No images yet — upload your first product shot above.</p>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {images.map(img => (
+            <div key={img.id} className="overflow-hidden rounded-2xl border border-[#d2d2d7] bg-white shadow-sm">
+              {/* Image comparison */}
+              <div className="relative grid grid-cols-2 divide-x divide-[#d2d2d7]">
+                <div className="aspect-square overflow-hidden bg-[#f5f5f7]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.original_public_url} alt="Original" className="h-full w-full object-cover" />
+                </div>
+                <div className="aspect-square overflow-hidden bg-[#0c0c0c]">
+                  {img.status === 'generating' ? (
+                    <div className="flex h-full items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-white/40" />
+                    </div>
+                  ) : img.status === 'error' ? (
+                    <div className="flex h-full items-center justify-center p-4 text-center">
+                      <p className="text-xs text-red-400">Generation failed</p>
+                    </div>
+                  ) : img.generated_public_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={img.generated_public_url} alt="Generated" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <p className="text-xs text-white/20">Pending</p>
+                    </div>
+                  )}
+                </div>
+                {/* Labels */}
+                <span className="absolute left-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">Original</span>
+                <span className="absolute right-2 top-2 rounded bg-black/40 px-1.5 py-0.5 text-[10px] text-white/70">Generated</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-1">
+                  {img.status === 'done' && (
+                    <>
+                      <button
+                        onClick={() => togglePublish(img)}
+                        title={img.published ? 'Unpublish' : 'Publish'}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] transition-colors hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                      >
+                        {img.published ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                      </button>
+                      {img.generated_public_url && (
+                        <button
+                          onClick={() => copyUrl(img.generated_public_url!, img.id)}
+                          title="Copy URL"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] transition-colors hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                        >
+                          {copied === img.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-medium ${img.published ? 'text-green-600' : 'text-[#86868b]'}`}>
+                    {img.status === 'generating' ? 'Generating…' : img.status === 'error' ? 'Error' : img.published ? 'Published' : 'Draft'}
+                  </span>
+                  <button
+                    onClick={() => deleteImage(img.id)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6e6e73] transition-colors hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
