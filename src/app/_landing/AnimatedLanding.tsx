@@ -60,6 +60,9 @@ export default function AnimatedLanding() {
             <Link href="/login" className="text-sm text-white/50 transition-colors hover:text-white">
               {nav.login}
             </Link>
+            <Link href="/portfolio" className="hidden text-sm text-white/50 transition-colors hover:text-white sm:block">
+              {nav.portfolio}
+            </Link>
             <Link href="/portal" className="hidden text-sm text-white/50 transition-colors hover:text-white sm:block">
               {nav.myOrders}
             </Link>

@@ -6,6 +6,7 @@ export const translations = {
       login: 'Login',
       myOrders: 'My orders',
       startOrder: 'Start order',
+      portfolio: 'Portfolio',
       admin: 'Admin',
       portal: 'Portal',
       logout: 'Sign out',
@@ -31,7 +32,7 @@ export const translations = {
         },
         prints: {
           title: '3D Prints',
-          description: 'Upload an STL or describe your idea. Printed in PLA, PETG, or TPU on our Bambu A1.',
+          description: 'Upload an STL or describe your idea. Printed in PLA, PETG, or TPU.',
         },
         diy: {
           title: 'DIY Projects',
@@ -213,6 +214,7 @@ export const translations = {
       login: 'Connexion',
       myOrders: 'Mes commandes',
       startOrder: 'Commander',
+      portfolio: 'Portfolio',
       admin: 'Admin',
       portal: 'Portail',
       logout: 'Se déconnecter',
@@ -238,7 +240,7 @@ export const translations = {
         },
         prints: {
           title: 'Impressions 3D',
-          description: 'Téléchargez un fichier STL ou décrivez votre idée. Imprimé en PLA, PETG ou TPU sur notre Bambu A1.',
+          description: 'Téléchargez un fichier STL ou décrivez votre idée. Imprimé en PLA, PETG ou TPU.',
         },
         diy: {
           title: 'Projets DIY',
