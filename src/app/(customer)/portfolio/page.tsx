@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { getLocale, t } from '@/lib/i18n'
 import { LocaleSwitcher } from '@/components/ui/LocaleSwitcher'
+import PortfolioGallery from './PortfolioGallery'
 
 const GRAIN_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`
 
@@ -52,43 +53,12 @@ export default async function PortfolioPage() {
           <p className="mt-3 max-w-md text-base text-white/40">{p.subtitle}</p>
         </div>
 
-        {!images?.length ? (
-          <div className="py-24 text-center">
-            <p className="text-white/20">{p.noItems}</p>
-          </div>
-        ) : (
-          <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
-            {images.map(img => (
-              <div key={img.id} className="mb-4 break-inside-avoid overflow-hidden rounded-2xl bg-[#141414]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={img.generated_public_url!}
-                  alt={img.title ?? 'Portfolio item'}
-                  className="w-full object-cover"
-                  loading="lazy"
-                />
-                {img.title && (
-                  <div className="px-5 py-4">
-                    <p className="text-sm font-medium text-white">{img.title}</p>
-                    {img.product_type && (
-                      <p className="mt-0.5 text-xs text-white/30 capitalize">{img.product_type.replace('_', ' ')}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-20 text-center">
-          <p className="text-sm text-white/30">{p.cta}</p>
-          <Link
-            href="/#products"
-            className="mt-4 inline-flex rounded-full bg-white px-8 py-3 text-sm font-medium text-black transition-colors hover:bg-white/90"
-          >
-            {p.ctaButton}
-          </Link>
-        </div>
+        <PortfolioGallery
+          images={(images ?? []) as { id: string; title: string | null; product_type: string | null; generated_public_url: string }[]}
+          noItems={p.noItems}
+          cta={p.cta}
+          ctaButton={p.ctaButton}
+        />
       </main>
     </div>
   )
