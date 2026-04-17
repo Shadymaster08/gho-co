@@ -4,13 +4,15 @@ import Anthropic from '@anthropic-ai/sdk'
 import Replicate from 'replicate'
 import { v4 as uuidv4 } from 'uuid'
 
-const BRAND_PROMPT_SUFFIX = `
-High contrast black and white tones with a warm natural wood surface
-(dark walnut or oak table or shelf) as the base element, creating contrast
-against a near-black (#0c0c0c) background. Soft directional side lighting,
-subtle film grain texture, monochromatic with wood grain as the only warmth,
-centered composition, premium minimalist aesthetic, sharp product focus,
-cinematic quality, professional studio photography, Gho&Co brand identity.`
+const PROMPTS: Record<string, string> = {
+  shirt: `Remove any people or humans entirely from this image. Keep only the clothing item (shirt, hoodie, crewneck, or jacket). Place the garment hanging naturally on a clean white wooden or metal hanger. Pure white background, soft diffused overhead studio lighting, no harsh shadows. Garment should be fully visible and unwrinkled. Clean editorial apparel product photography, streetwear brand lookbook style. All printed graphics, text and embroidery on the garment must remain sharp and readable.`,
+
+  '3d_print': `Keep the 3D printed object exactly as it is — do not alter its shape, color or details. Replace the background with a clean light grey or soft warm off-white surface. Place the object on a smooth matte light surface with a very subtle shadow underneath. Professional product photography: soft three-point studio lighting, bright key light from upper left, fill light from right, subtle rim light. Sharp focus on all details and layer lines. Commercial product photography style.`,
+
+  lighting: `Keep the lighting product exactly as it is. Place it in a clean dark environment (near-black background). The product should appear to be glowing or illuminated, showcasing its light output. Dramatic cinematic presentation, long-exposure style to capture the light glow. Professional commercial photography. The product itself must remain sharp and recognizable while the light effect is enhanced.`,
+
+  default: `Keep the product exactly as it is. Replace only the background with a pure white studio background. Add professional soft diffused overhead lighting, no harsh shadows. Tilt the product slightly at a diagonal angle. Clean editorial lookbook style. Product details must remain sharp and readable.`,
+}
 
 export async function POST(request: Request) {
   const supabase = createClient()
@@ -20,7 +22,7 @@ export async function POST(request: Request) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const { portfolioImageId } = await request.json()
+  const { portfolioImageId, productType, shirtSide } = await request.json()
   if (!portfolioImageId) return NextResponse.json({ error: 'portfolioImageId required' }, { status: 400 })
 
   const service = createServiceClient()
@@ -33,10 +35,10 @@ export async function POST(request: Request) {
 
   if (rowErr || !row) return NextResponse.json({ error: 'Portfolio image not found' }, { status: 404 })
 
-  // Mark as generating
+  // Mark as generating and save product type
   await service
     .from('portfolio_images')
-    .update({ status: 'generating' })
+    .update({ status: 'generating', ...(productType ? { product_type: productType } : {}) })
     .eq('id', portfolioImageId)
 
   try {
@@ -47,40 +49,51 @@ export async function POST(request: Request) {
     const base64Image = Buffer.from(imageBuffer).toString('base64')
     const mimeType = (imageRes.headers.get('content-type') ?? 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 
-    // Step 2: Claude Vision — analyze product and craft generation prompt
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-    const visionRes = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mimeType, data: base64Image },
-          },
-          {
-            type: 'text',
-            text: `You are a product photography prompt engineer. Look at this product photo and write a precise, detailed description of the product for an AI image generator. Focus on: what the product is, its shape, material, key features, and any text/branding visible. Be specific and factual. Output only the product description (1-2 sentences), nothing else.`,
-          },
-        ],
-      }],
-    })
+    // Step 2: Claude Vision — analyze product and craft generation prompt (optional)
+    let productDescription = 'a custom product'
+    if (process.env.ANTHROPIC_API_KEY) {
+      try {
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+        const visionRes = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 300,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mimeType, data: base64Image },
+              },
+              {
+                type: 'text',
+                text: `You are a product photography prompt engineer. Look at this product photo and write a precise, detailed description of the product for an AI image generator. Focus on: what the product is, its shape, material, key features, and any text/branding visible. Be specific and factual. Output only the product description (1-2 sentences), nothing else.`,
+              },
+            ],
+          }],
+        })
+        productDescription = (visionRes.content[0] as { type: string; text: string }).text.trim()
+      } catch (e) {
+        console.warn('Claude Vision failed, using generic prompt:', e)
+      }
+    }
 
-    const productDescription = (visionRes.content[0] as { type: string; text: string }).text.trim()
-    const fullPrompt = `Professional product photography of ${productDescription}. ${BRAND_PROMPT_SUFFIX}`
+    let basePrompt = PROMPTS[productType] ?? PROMPTS.default
+    if (productType === 'shirt' && shirtSide) {
+      basePrompt += ` This is the ${shirtSide} of the garment — make sure the ${shirtSide} is facing forward and fully visible.`
+    }
+    const fullPrompt = productDescription !== 'a custom product'
+      ? `${basePrompt} The product is: ${productDescription}.`
+      : basePrompt
 
     // Step 3: Replicate Flux img2img
     const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN })
 
-    const output = await replicate.run('black-forest-labs/flux-1.1-pro', {
+    const output = await replicate.run('black-forest-labs/flux-kontext-pro', {
       input: {
         prompt: fullPrompt,
-        image_prompt: row.original_public_url,
-        prompt_upsampling: true,
-        image_prompt_strength: 0.3,
+        input_image: row.original_public_url,
         aspect_ratio: '1:1',
-        output_format: 'webp',
+        output_format: 'jpg',
         output_quality: 90,
         safety_tolerance: 5,
       },
@@ -100,11 +113,11 @@ export async function POST(request: Request) {
     const genRes = await fetch(String(generatedUrl))
     if (!genRes.ok) throw new Error('Failed to download generated image')
     const genBuffer = await genRes.arrayBuffer()
-    const genPath = `generated/${uuidv4()}.webp`
+    const genPath = `generated/${uuidv4()}.jpg`
 
     const { error: storageErr } = await service.storage
       .from('portfolio')
-      .upload(genPath, genBuffer, { contentType: 'image/webp', upsert: false })
+      .upload(genPath, genBuffer, { contentType: 'image/jpeg', upsert: false })
 
     if (storageErr) throw new Error(`Storage upload failed: ${storageErr.message}`)
 
