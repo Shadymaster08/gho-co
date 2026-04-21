@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { resend } from '@/lib/resend/client'
 import { InvoiceSent } from '@/lib/resend/templates/InvoiceSent'
 
-export async function POST(request: Request, { params }: { params: { invoiceId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ invoiceId: string }> }) {
+  const { invoiceId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -13,7 +14,7 @@ export async function POST(request: Request, { params }: { params: { invoiceId: 
   const { data: invoice } = await supabase
     .from('invoices')
     .select('*, orders(order_number, profiles(email, full_name))')
-    .eq('id', params.invoiceId)
+    .eq('id', invoiceId)
     .single()
 
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
@@ -30,7 +31,7 @@ export async function POST(request: Request, { params }: { params: { invoiceId: 
       total_cents: invoice.total_cents,
       due_date: invoice.due_date,
       payment_instructions: invoice.payment_instructions,
-      invoice_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${params.invoiceId}`,
+      invoice_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${invoiceId}`,
       line_items: invoice.line_items,
     }),
   })
@@ -38,7 +39,7 @@ export async function POST(request: Request, { params }: { params: { invoiceId: 
   await supabase.from('email_log').insert({
     recipient_email: customer.email,
     template: 'invoice_sent',
-    related_id: params.invoiceId,
+    related_id: invoiceId,
     resend_message_id: emailData?.id ?? null,
     status: emailError ? 'failed' : 'sent',
     error_message: emailError?.message ?? null,
@@ -46,7 +47,7 @@ export async function POST(request: Request, { params }: { params: { invoiceId: 
 
   if (emailError) return NextResponse.json({ error: 'Email failed' }, { status: 500 })
 
-  await supabase.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', params.invoiceId)
+  await supabase.from('invoices').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', invoiceId)
 
   return NextResponse.json({ success: true })
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
-export async function GET(request: Request, { params }: { params: { orderId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -10,7 +11,7 @@ export async function GET(request: Request, { params }: { params: { orderId: str
   const { data: order, error } = await supabase
     .from('orders')
     .select('*, profiles(email, full_name), order_files(*), quotes(*), invoices(*)')
-    .eq('id', params.orderId)
+    .eq('id', orderId)
     .single()
 
   if (error || !order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -18,7 +19,8 @@ export async function GET(request: Request, { params }: { params: { orderId: str
   return NextResponse.json(order)
 }
 
-export async function PATCH(request: Request, { params }: { params: { orderId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -31,14 +33,14 @@ export async function PATCH(request: Request, { params }: { params: { orderId: s
 
   // Customers can only update configuration (file paths) on their own orders
   if (!isAdmin) {
-    const { data: order } = await supabase.from('orders').select('customer_id').eq('id', params.orderId).single()
+    const { data: order } = await supabase.from('orders').select('customer_id').eq('id', orderId).single()
     if (order?.customer_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
     const { configuration } = body
     const { data, error } = await supabase
       .from('orders')
       .update({ configuration })
-      .eq('id', params.orderId)
+      .eq('id', orderId)
       .select()
       .single()
 
@@ -56,7 +58,7 @@ export async function PATCH(request: Request, { params }: { params: { orderId: s
   const { data, error } = await supabase
     .from('orders')
     .update(update)
-    .eq('id', params.orderId)
+    .eq('id', orderId)
     .select()
     .single()
 
@@ -64,7 +66,8 @@ export async function PATCH(request: Request, { params }: { params: { orderId: s
   return NextResponse.json(data)
 }
 
-export async function DELETE(request: Request, { params }: { params: { orderId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -72,7 +75,7 @@ export async function DELETE(request: Request, { params }: { params: { orderId: 
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const serviceClient = createServiceClient()
-  const { error } = await serviceClient.from('orders').delete().eq('id', params.orderId)
+  const { error } = await serviceClient.from('orders').delete().eq('id', orderId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

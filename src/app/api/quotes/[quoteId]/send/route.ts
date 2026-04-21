@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { resend } from '@/lib/resend/client'
 import { QuoteSent } from '@/lib/resend/templates/QuoteSent'
 
-export async function POST(request: Request, { params }: { params: { quoteId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
+  const { quoteId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -13,7 +14,7 @@ export async function POST(request: Request, { params }: { params: { quoteId: st
   const { data: quote } = await supabase
     .from('quotes')
     .select('*, orders(order_number, profiles(email, full_name))')
-    .eq('id', params.quoteId)
+    .eq('id', quoteId)
     .single()
 
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
@@ -32,7 +33,7 @@ export async function POST(request: Request, { params }: { params: { quoteId: st
       quote_number: quote.quote_number,
       total_cents: quote.total_cents,
       valid_until: quote.valid_until,
-      quote_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal/quotes/${params.quoteId}`,
+      quote_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal/quotes/${quoteId}`,
       line_items: quote.line_items,
     }),
   })
@@ -40,7 +41,7 @@ export async function POST(request: Request, { params }: { params: { quoteId: st
   await supabase.from('email_log').insert({
     recipient_email: customer.email,
     template: 'quote_sent',
-    related_id: params.quoteId,
+    related_id: quoteId,
     resend_message_id: emailData?.id ?? null,
     status: emailError ? 'failed' : 'sent',
     error_message: emailError?.message ?? null,
@@ -48,7 +49,7 @@ export async function POST(request: Request, { params }: { params: { quoteId: st
 
   if (emailError) return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
 
-  await supabase.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', params.quoteId)
+  await supabase.from('quotes').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', quoteId)
   await supabase.from('orders').update({ status: 'quoted' }).eq('id', quote.order_id)
 
   return NextResponse.json({ success: true })

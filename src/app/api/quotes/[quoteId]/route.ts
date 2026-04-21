@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
-export async function GET(request: Request, { params }: { params: { quoteId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
+  const { quoteId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -9,14 +10,15 @@ export async function GET(request: Request, { params }: { params: { quoteId: str
   const { data: quote, error } = await supabase
     .from('quotes')
     .select('*, orders(*)')
-    .eq('id', params.quoteId)
+    .eq('id', quoteId)
     .single()
 
   if (error || !quote) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(quote)
 }
 
-export async function PATCH(request: Request, { params }: { params: { quoteId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
+  const { quoteId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -32,7 +34,7 @@ export async function PATCH(request: Request, { params }: { params: { quoteId: s
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { data: current } = await supabase.from('quotes').select('status, order_id').eq('id', params.quoteId).single()
+    const { data: current } = await supabase.from('quotes').select('status, order_id').eq('id', quoteId).single()
     if (current?.status !== 'sent') return NextResponse.json({ error: 'Quote cannot be updated' }, { status: 400 })
 
     const update: any = { status }
@@ -42,7 +44,7 @@ export async function PATCH(request: Request, { params }: { params: { quoteId: s
     const { data, error } = await supabase
       .from('quotes')
       .update(update)
-      .eq('id', params.quoteId)
+      .eq('id', quoteId)
       .select()
       .single()
 
@@ -73,12 +75,13 @@ export async function PATCH(request: Request, { params }: { params: { quoteId: s
   if (internal_notes !== undefined) update.internal_notes = internal_notes
   if (status !== undefined) update.status = status
 
-  const { data, error } = await supabase.from('quotes').update(update).eq('id', params.quoteId).select().single()
+  const { data, error } = await supabase.from('quotes').update(update).eq('id', quoteId).select().single()
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   return NextResponse.json(data)
 }
 
-export async function DELETE(request: Request, { params }: { params: { quoteId: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ quoteId: string }> }) {
+  const { quoteId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -86,6 +89,6 @@ export async function DELETE(request: Request, { params }: { params: { quoteId: 
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const serviceClient = createServiceClient()
-  await serviceClient.from('quotes').delete().eq('id', params.quoteId)
+  await serviceClient.from('quotes').delete().eq('id', quoteId)
   return NextResponse.json({ success: true })
 }
