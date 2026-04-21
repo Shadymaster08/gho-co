@@ -10,7 +10,7 @@ const ALLOWED_TYPES: Record<string, { mimes: string[]; maxBytes: number }> = {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const serviceSupabase = createServiceClient()
   const { data: { user } } = await supabase.auth.getUser()
 

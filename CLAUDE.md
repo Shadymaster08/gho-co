@@ -76,6 +76,8 @@ ADMIN_NOTIFY_EMAIL=cg.designs08@gmail.com
 | `supabase/migrations/003_pricing_config.sql` | Done | `price_configs` table + 11 seeded supplier prices |
 | `supabase/migrations/004_supplier_scout.sql` | Done | `supplier_scout_reports` table |
 | `supabase/migrations/005_storage_bucket.sql` | Done | `order-files` storage bucket + RLS policies for artwork/STL uploads |
+| `supabase/migrations/006_portfolio.sql` | Done | `portfolio_images` table + storage bucket |
+| `supabase/migrations/007_etsy_trends.sql` | **Run me** | `etsy_trend_reports` table for Agent 8 |
 
 ---
 
@@ -189,6 +191,16 @@ All agents live at `src/app/api/agents/`. All require admin auth.
 - Returns `{ success, cartUrl, manifest, validation }` with per-item match/wrong_qty/missing status
 - **Only works locally** (needs a display for the browser window)
 - Fabrik.ca site structure: Vue.js + Craft Commerce. Form: `form.FormProduct`, qty inputs: `lineItems[N][qty]`, colour swatches: `li.color[data-color]`
+
+### Agent 8 — Etsy Trend Analyzer (`/api/agents/etsy-trends`)
+- **POST** `{ triggered_by? }` → run a new Etsy trend scan, admin only
+- **GET** → returns the 5 most recent reports, admin only
+- Uses Claude (`claude-sonnet-4-6`) with the `web_search_20250305` tool to browse Etsy bestsellers across 4 categories (shirts, 3d_prints, diy, lighting) — 3 search queries per category
+- Per-category output: `trending_themes[]`, `hot_keywords[]`, `top_listings[]` (title / shop / price_usd / review_count / url / thumbnail_url / why_it_works), `style_insights`, `design_ideas_for_you[]`
+- Server-side validates every listing URL starts with `https://www.etsy.com/listing/` — invalid entries dropped before saving
+- Saves results to `etsy_trend_reports` (migration 007)
+- UI: `/admin/trends` page, `EtsyTrendsPanel` component — tabbed category view, thumbnails grid, keyword chips, design-idea checklist
+- Cost per run: ~$0.30–$0.60 (12 web searches + ~20k Claude tokens). Manual trigger only
 
 ---
 

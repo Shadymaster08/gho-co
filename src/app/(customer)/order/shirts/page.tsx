@@ -262,15 +262,15 @@ const PRODUCTS: Record<ShirtStyle, ProductDef> = {
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type ColorGroupState = { color: string; quantities: Record<string, number> }
+type StyleGroupState = { style: ShirtStyle; colorGroups: ColorGroupState[] }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ShirtsOrderPage() {
   const router = useRouter()
 
-  const [shirtStyle, setShirtStyle] = useState<ShirtStyle>('tshirt')
-  const [colorGroups, setColorGroups] = useState<ColorGroupState[]>([
-    { color: 'White', quantities: {} },
+  const [styleGroups, setStyleGroups] = useState<StyleGroupState[]>([
+    { style: 'tshirt', colorGroups: [{ color: 'White', quantities: {} }] },
   ])
   const [dtfFrontW, setDtfFrontW] = useState('')
   const [dtfFrontH, setDtfFrontH] = useState('')
@@ -278,7 +278,6 @@ export default function ShirtsOrderPage() {
   const [dtfBackH, setDtfBackH] = useState('')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
-  const [orderId, setOrderId] = useState<string | null>(null)
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [backFile, setBackFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -288,58 +287,99 @@ export default function ShirtsOrderPage() {
   const [customLoading, setCustomLoading] = useState(false)
 
   const { uploadFile, progress, uploading } = useUpload()
-  const newGroupRef = useRef<HTMLDivElement>(null)
-  const prevGroupCount = useRef(colorGroups.length)
+  const newStyleGroupRef = useRef<HTMLDivElement>(null)
+  const prevStyleGroupCount = useRef(styleGroups.length)
 
   useEffect(() => {
-    if (colorGroups.length > prevGroupCount.current) {
-      newGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (styleGroups.length > prevStyleGroupCount.current) {
+      newStyleGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
-    prevGroupCount.current = colorGroups.length
-  }, [colorGroups.length])
+    prevStyleGroupCount.current = styleGroups.length
+  }, [styleGroups.length])
 
-  const product = PRODUCTS[shirtStyle]
-
-  function handleStyleChange(style: ShirtStyle) {
-    setShirtStyle(style)
-    const available = PRODUCTS[style].colors
-    setColorGroups(groups =>
-      groups.map(g => ({
-        ...g,
-        color: available.some(c => c.name === g.color) ? g.color : available[0].name,
-        quantities: {},
-      }))
-    )
-  }
+  // ── State helpers ──────────────────────────────────────────────────────────
 
   function totalQuantity() {
-    return colorGroups.reduce((total, g) =>
-      total + Object.values(g.quantities).reduce((a, b) => a + b, 0), 0)
+    return styleGroups.reduce((total, sg) =>
+      total + sg.colorGroups.reduce((t, g) =>
+        t + Object.values(g.quantities).reduce((a, b) => a + b, 0), 0), 0)
   }
 
-  function groupQuantity(g: ColorGroupState) {
+  function styleGroupQuantity(sg: StyleGroupState) {
+    return sg.colorGroups.reduce((t, g) =>
+      t + Object.values(g.quantities).reduce((a, b) => a + b, 0), 0)
+  }
+
+  function colorGroupQuantity(g: ColorGroupState) {
     return Object.values(g.quantities).reduce((a, b) => a + b, 0)
   }
 
-  function addColorGroup() {
-    const usedColors = new Set(colorGroups.map(g => g.color))
-    const next = product.colors.find(c => !usedColors.has(c.name)) ?? product.colors[0]
-    setColorGroups(g => [...g, { color: next.name, quantities: {} }])
+  function addStyleGroup() {
+    const usedStyles = new Set(styleGroups.map(sg => sg.style))
+    const nextStyle = (Object.keys(PRODUCTS) as ShirtStyle[]).find(s => !usedStyles.has(s))
+      ?? 'tshirt'
+    setStyleGroups(sgs => [...sgs, {
+      style: nextStyle,
+      colorGroups: [{ color: PRODUCTS[nextStyle].colors[0].name, quantities: {} }],
+    }])
   }
 
-  function removeColorGroup(index: number) {
-    setColorGroups(g => g.filter((_, i) => i !== index))
+  function removeStyleGroup(sgIdx: number) {
+    setStyleGroups(sgs => sgs.filter((_, i) => i !== sgIdx))
   }
 
-  function setGroupColor(index: number, color: string) {
-    setColorGroups(g => g.map((group, i) => i === index ? { ...group, color } : group))
+  function setStyleGroupStyle(sgIdx: number, style: ShirtStyle) {
+    setStyleGroups(sgs => sgs.map((sg, i) => {
+      if (i !== sgIdx) return sg
+      const available = PRODUCTS[style].colors
+      return {
+        style,
+        colorGroups: sg.colorGroups.map(g => ({
+          ...g,
+          color: available.some(c => c.name === g.color) ? g.color : available[0].name,
+          quantities: {},
+        })),
+      }
+    }))
   }
 
-  function setGroupQty(index: number, size: string, value: number) {
-    setColorGroups(g => g.map((group, i) =>
-      i === index ? { ...group, quantities: { ...group.quantities, [size]: value } } : group
+  function addColorGroup(sgIdx: number) {
+    setStyleGroups(sgs => sgs.map((sg, i) => {
+      if (i !== sgIdx) return sg
+      const usedColors = new Set(sg.colorGroups.map(g => g.color))
+      const next = PRODUCTS[sg.style].colors.find(c => !usedColors.has(c.name))
+        ?? PRODUCTS[sg.style].colors[0]
+      return { ...sg, colorGroups: [...sg.colorGroups, { color: next.name, quantities: {} }] }
+    }))
+  }
+
+  function removeColorGroup(sgIdx: number, cgIdx: number) {
+    setStyleGroups(sgs => sgs.map((sg, i) =>
+      i !== sgIdx ? sg : { ...sg, colorGroups: sg.colorGroups.filter((_, j) => j !== cgIdx) }
     ))
   }
+
+  function setGroupColor(sgIdx: number, cgIdx: number, color: string) {
+    setStyleGroups(sgs => sgs.map((sg, i) =>
+      i !== sgIdx ? sg : {
+        ...sg,
+        colorGroups: sg.colorGroups.map((g, j) => j !== cgIdx ? g : { ...g, color }),
+      }
+    ))
+  }
+
+  function setGroupQty(sgIdx: number, cgIdx: number, size: string, value: number) {
+    setStyleGroups(sgs => sgs.map((sg, i) =>
+      i !== sgIdx ? sg : {
+        ...sg,
+        colorGroups: sg.colorGroups.map((g, j) =>
+          j !== cgIdx ? g : { ...g, quantities: { ...g.quantities, [size]: value } }
+        ),
+      }
+    ))
+  }
+
+  // ── Validation & submit ────────────────────────────────────────────────────
 
   function validate() {
     const errs: Record<string, string> = {}
@@ -355,15 +395,19 @@ export default function ShirtsOrderPage() {
     setLoading(true)
 
     const config = {
-      shirt_style: shirtStyle,
-      color_groups: colorGroups
-        .map(g => ({
-          color: g.color,
-          sizes: product.sizes
-            .map(size => ({ size, quantity: g.quantities[size] ?? 0 }))
-            .filter(s => s.quantity > 0),
+      style_groups: styleGroups
+        .map(sg => ({
+          shirt_style: sg.style,
+          color_groups: sg.colorGroups
+            .map(g => ({
+              color: g.color,
+              sizes: PRODUCTS[sg.style].sizes
+                .map(size => ({ size, quantity: g.quantities[size] ?? 0 }))
+                .filter(s => s.quantity > 0),
+            }))
+            .filter(g => g.sizes.length > 0),
         }))
-        .filter(g => g.sizes.length > 0),
+        .filter(sg => sg.color_groups.length > 0),
       front_file_path: null,
       back_file_path: null,
       front_file_url: null,
@@ -388,7 +432,6 @@ export default function ShirtsOrderPage() {
     }
 
     const { order_id } = await draftRes.json()
-    setOrderId(order_id)
 
     let front = null
     let back = null
@@ -438,38 +481,19 @@ export default function ShirtsOrderPage() {
     router.push(`/order-confirmation/${order_id}`)
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
       <h1 className="mb-2 text-2xl font-bold text-gray-900">Custom Apparel</h1>
-      <p className="mb-8 text-gray-500">Choose your style, pick colours, upload your artwork, and tell us your sizes.</p>
+      <p className="mb-8 text-gray-500">Upload your design once — we'll apply it across all the styles you need. One invoice per design.</p>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-8 rounded-xl bg-white p-8 shadow-sm border border-gray-200">
 
-        {/* ── Style selector ── */}
+        {/* ── Artwork (shared across all styles) ── */}
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Style</h2>
-          <div className="flex flex-wrap gap-2">
-            {(Object.keys(PRODUCTS) as ShirtStyle[]).map(style => (
-              <button
-                key={style}
-                type="button"
-                onClick={() => handleStyleChange(style)}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                  shirtStyle === style
-                    ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                    : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300'
-                }`}
-              >
-                {PRODUCTS[style].label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1 text-xs text-gray-400">{product.sublabel} · {product.sku}</p>
-        </div>
-
-        {/* ── Artwork ── */}
-        <div>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Artwork</h2>
+          <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-gray-500">Artwork</h2>
+          <p className="mb-4 text-xs text-gray-400">Same design applied to all styles below</p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <FileDropzone
@@ -528,73 +552,126 @@ export default function ShirtsOrderPage() {
           <p className="mt-2 text-xs text-gray-400">PNG, JPEG, or WebP — max 25 MB — 300 DPI recommended · Leave size blank if unsure</p>
         </div>
 
-        {/* ── Colour groups ── */}
+        {/* ── Style groups ── */}
         <div>
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Colours &amp; sizes</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Styles &amp; quantities</h2>
           {errors.sizes && <p className="mb-3 text-xs text-red-600">{errors.sizes}</p>}
 
-          <div className="flex flex-col gap-4">
-            {colorGroups.map((group, index) => {
-              const groupQty = groupQuantity(group)
-              const isLast = index === colorGroups.length - 1
+          <div className="flex flex-col gap-6">
+            {styleGroups.map((sg, sgIdx) => {
+              const product = PRODUCTS[sg.style]
+              const sgQty = styleGroupQuantity(sg)
+              const isLastSG = sgIdx === styleGroups.length - 1
               return (
-                <div key={index} ref={isLast ? newGroupRef : undefined} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-4 w-4 rounded-full border border-gray-300 shrink-0"
-                        style={{ backgroundColor: product.colors.find(c => c.name === group.color)?.hex ?? '#ccc' }}
-                      />
-                      <span className="text-sm font-medium text-gray-700">{group.color}</span>
-                      {groupQty > 0 && (
-                        <span className="text-xs text-gray-400">· {groupQty} items</span>
-                      )}
+                <div
+                  key={sgIdx}
+                  ref={isLastSG ? newStyleGroupRef : undefined}
+                  className="rounded-xl border border-gray-200 bg-gray-50 p-5"
+                >
+                  {/* Style header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(Object.keys(PRODUCTS) as ShirtStyle[]).map(style => (
+                        <button
+                          key={style}
+                          type="button"
+                          onClick={() => setStyleGroupStyle(sgIdx, style)}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            sg.style === style
+                              ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-300'
+                          }`}
+                        >
+                          {PRODUCTS[style].label}
+                        </button>
+                      ))}
                     </div>
-                    {colorGroups.length > 1 && (
+                    {styleGroups.length > 1 && (
                       <button
                         type="button"
-                        onClick={() => removeColorGroup(index)}
-                        className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                        onClick={() => removeStyleGroup(sgIdx)}
+                        className="ml-3 shrink-0 text-xs text-gray-400 hover:text-red-500 transition-colors"
                       >
                         Remove
                       </button>
                     )}
                   </div>
+                  <p className="mb-4 text-xs text-gray-400">{product.sublabel} · {product.sku}{sgQty > 0 ? ` · ${sgQty} items` : ''}</p>
 
-                  {/* Swatch picker */}
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {product.colors.map(({ name, hex }) => {
-                      const selected = group.color === name
-                      const light = isLight(hex)
+                  {/* Colour groups within this style */}
+                  <div className="flex flex-col gap-4">
+                    {sg.colorGroups.map((group, cgIdx) => {
+                      const cgQty = colorGroupQuantity(group)
                       return (
-                        <button
-                          key={name}
-                          type="button"
-                          title={name}
-                          onClick={() => setGroupColor(index, name)}
-                          className={`h-6 w-6 rounded-full transition-transform hover:scale-110 focus:outline-none ${
-                            selected ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''
-                          } ${light ? 'border border-gray-300' : ''}`}
-                          style={{ backgroundColor: hex }}
-                        />
+                        <div key={cgIdx} className="rounded-lg border border-gray-200 bg-white p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-4 w-4 rounded-full border border-gray-300 shrink-0"
+                                style={{ backgroundColor: product.colors.find(c => c.name === group.color)?.hex ?? '#ccc' }}
+                              />
+                              <span className="text-sm font-medium text-gray-700">{group.color}</span>
+                              {cgQty > 0 && (
+                                <span className="text-xs text-gray-400">· {cgQty} items</span>
+                              )}
+                            </div>
+                            {sg.colorGroups.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeColorGroup(sgIdx, cgIdx)}
+                                className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Swatch picker */}
+                          <div className="flex flex-wrap gap-1.5 mb-4">
+                            {product.colors.map(({ name, hex }) => {
+                              const selected = group.color === name
+                              const light = isLight(hex)
+                              return (
+                                <button
+                                  key={name}
+                                  type="button"
+                                  title={name}
+                                  onClick={() => setGroupColor(sgIdx, cgIdx, name)}
+                                  className={`h-6 w-6 rounded-full transition-transform hover:scale-110 focus:outline-none ${
+                                    selected ? 'ring-2 ring-offset-1 ring-indigo-600 scale-110' : ''
+                                  } ${light ? 'border border-gray-300' : ''}`}
+                                  style={{ backgroundColor: hex }}
+                                />
+                              )
+                            })}
+                          </div>
+
+                          {/* Size quantities */}
+                          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+                            {product.sizes.map(size => (
+                              <div key={size} className="flex flex-col items-center gap-1">
+                                <label className="text-xs font-medium text-gray-500">{size}</label>
+                                <input
+                                  type="number" min={0} max={999}
+                                  value={group.quantities[size] ?? 0}
+                                  onChange={e => setGroupQty(sgIdx, cgIdx, size, parseInt(e.target.value) || 0)}
+                                  className="w-full rounded-lg border border-gray-300 bg-white p-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )
                     })}
                   </div>
 
-                  {/* Size quantities */}
-                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-                    {product.sizes.map(size => (
-                      <div key={size} className="flex flex-col items-center gap-1">
-                        <label className="text-xs font-medium text-gray-500">{size}</label>
-                        <input
-                          type="number" min={0} max={999}
-                          value={group.quantities[size] ?? 0}
-                          onChange={e => setGroupQty(index, size, parseInt(e.target.value) || 0)}
-                          className="w-full rounded-lg border border-gray-300 bg-white p-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addColorGroup(sgIdx)}
+                    className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full justify-center"
+                  >
+                    <span className="text-base leading-none">+</span> Add another colour
+                  </button>
                 </div>
               )
             })}
@@ -602,20 +679,21 @@ export default function ShirtsOrderPage() {
 
           <button
             type="button"
-            onClick={addColorGroup}
-            className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full justify-center"
+            onClick={addStyleGroup}
+            className="mt-4 flex items-center gap-1.5 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-600 hover:border-indigo-500 hover:bg-indigo-100 transition-colors w-full justify-center"
           >
-            <span className="text-base leading-none">+</span> Add another colour
+            <span className="text-base leading-none">+</span> Add another style
           </button>
 
           {totalQuantity() > 0 && (
             <p className="mt-3 text-sm text-gray-500">
               Total: <strong>{totalQuantity()} items</strong>
-              {colorGroups.length > 1 && (
-                <span className="text-gray-400">
-                  {' '}({colorGroups.filter(g => groupQuantity(g) > 0).map(g => `${g.color} ×${groupQuantity(g)}`).join(', ')})
-                </span>
-              )}
+              <span className="text-gray-400">
+                {' '}({styleGroups
+                  .filter(sg => styleGroupQuantity(sg) > 0)
+                  .map(sg => `${PRODUCTS[sg.style].label} ×${styleGroupQuantity(sg)}`)
+                  .join(', ')})
+              </span>
             </p>
           )}
         </div>

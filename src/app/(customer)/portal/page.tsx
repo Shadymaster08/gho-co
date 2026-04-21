@@ -10,11 +10,11 @@ import { LocaleSwitcherLight } from '@/components/ui/LocaleSwitcher'
 export const metadata = { title: 'My Orders — Gho&Co' }
 
 export default async function PortalPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const locale = getLocale()
+  const locale = await getLocale()
   const T = t(locale)
   const p = T.portal
 

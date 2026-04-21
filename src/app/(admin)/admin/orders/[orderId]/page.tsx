@@ -14,43 +14,76 @@ import { useRouter } from 'next/navigation'
 import type { Order, OrderStatus } from '@/types'
 import { normalizeShirtConfig } from '@/lib/pricing'
 
+const SHIRT_STYLE_LABELS: Record<string, string> = {
+  tshirt: 'T-Shirt', longsleeve: 'Long Sleeve', crewneck: 'Crewneck',
+  hoodie: 'Hoodie', ziphoodie: 'Zip Hoodie',
+}
+
+function ColorGroupRows({ colorGroups }: { colorGroups: any[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {colorGroups.map((group: any, i: number) => {
+        const groupQty = group.sizes.reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
+        const activeSizes = group.sizes.filter((sz: any) => sz.quantity > 0)
+        return (
+          <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <span className="font-medium text-gray-800">{group.color}</span>
+            <span className="text-gray-400 ml-2">×{groupQty}</span>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {activeSizes.map((sz: any) => (
+                <span key={sz.size} className="text-xs text-gray-600 bg-white border border-gray-200 rounded px-1.5 py-0.5">
+                  {sz.size}: {sz.quantity}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ShirtConfigDisplay({ config }: { config: any }) {
-  const { color_groups } = normalizeShirtConfig(config)
-  const style = config.shirt_style ?? 'tshirt'
-  const styleName = style.charAt(0).toUpperCase() + style.slice(1)
-  const totalQty = color_groups.flatMap((g: any) => g.sizes).reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
+  const isMultiStyle = Array.isArray(config.style_groups) && config.style_groups.length > 0
+
+  const totalQty = isMultiStyle
+    ? config.style_groups.flatMap((sg: any) => (sg.color_groups ?? []).flatMap((g: any) => g.sizes))
+        .reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
+    : normalizeShirtConfig(config).color_groups.flatMap((g: any) => g.sizes)
+        .reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
 
   return (
     <div className="flex flex-col gap-4 text-sm">
-      <div className="flex gap-6">
-        <div><span className="text-gray-500">Style</span><p className="font-medium text-gray-900 mt-0.5">{styleName}</p></div>
+      <div className="flex gap-6 flex-wrap">
         <div><span className="text-gray-500">Total qty</span><p className="font-medium text-gray-900 mt-0.5">{totalQty}</p></div>
         {config.dtf_front_width && <div><span className="text-gray-500">Front DTF</span><p className="font-medium text-gray-900 mt-0.5">{config.dtf_front_width}″ × {config.dtf_front_height}″</p></div>}
         {config.dtf_back_width && <div><span className="text-gray-500">Back DTF</span><p className="font-medium text-gray-900 mt-0.5">{config.dtf_back_width}″ × {config.dtf_back_height}″</p></div>}
       </div>
 
-      <div>
-        <p className="text-gray-500 mb-2">Colours &amp; sizes</p>
-        <div className="flex flex-col gap-2">
-          {color_groups.map((group: any, i: number) => {
-            const groupQty = group.sizes.reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
-            const activeSizes = group.sizes.filter((sz: any) => sz.quantity > 0)
+      {isMultiStyle ? (
+        <div className="flex flex-col gap-4">
+          {config.style_groups.map((sg: any, i: number) => {
+            const sgQty = (sg.color_groups ?? []).flatMap((g: any) => g.sizes)
+              .reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
             return (
-              <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <span className="font-medium text-gray-800">{group.color}</span>
-                <span className="text-gray-400 ml-2">×{groupQty}</span>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  {activeSizes.map((sz: any) => (
-                    <span key={sz.size} className="text-xs text-gray-600 bg-white border border-gray-200 rounded px-1.5 py-0.5">
-                      {sz.size}: {sz.quantity}
-                    </span>
-                  ))}
-                </div>
+              <div key={i}>
+                <p className="text-gray-500 mb-2 font-medium">
+                  {SHIRT_STYLE_LABELS[sg.shirt_style] ?? sg.shirt_style}
+                  <span className="text-gray-400 font-normal ml-2">×{sgQty}</span>
+                </p>
+                <ColorGroupRows colorGroups={sg.color_groups ?? []} />
               </div>
             )
           })}
         </div>
-      </div>
+      ) : (
+        <div>
+          <p className="text-gray-500 mb-2">
+            {SHIRT_STYLE_LABELS[config.shirt_style] ?? config.shirt_style ?? 'T-Shirt'} — Colours &amp; sizes
+          </p>
+          <ColorGroupRows colorGroups={normalizeShirtConfig(config).color_groups} />
+        </div>
+      )}
     </div>
   )
 }

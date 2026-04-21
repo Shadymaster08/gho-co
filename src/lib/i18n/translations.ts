@@ -178,6 +178,7 @@ export const translations = {
         invoices: 'Invoices',
         supplier: 'Supplier',
         portfolio: 'Portfolio',
+        trends: 'Trends',
         signOut: 'Sign out',
       },
       portfolio: {
@@ -392,6 +393,7 @@ export const translations = {
         invoices: 'Factures',
         supplier: 'Fournisseur',
         portfolio: 'Portfolio',
+        trends: 'Tendances',
         signOut: 'Se déconnecter',
       },
       portfolio: {

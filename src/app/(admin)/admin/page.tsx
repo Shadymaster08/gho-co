@@ -10,7 +10,7 @@ import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 export const metadata = { title: 'Dashboard — Gho&Co Admin' }
 
 export default async function AdminDashboardPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

@@ -4,7 +4,7 @@ import { resend } from '@/lib/resend/client'
 import { QuoteSent } from '@/lib/resend/templates/QuoteSent'
 
 export async function POST(request: Request, { params }: { params: { quoteId: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 export const metadata = { title: 'Invoices — Gho&Co Admin' }
 
 export default async function AdminInvoicesPage({ searchParams }: { searchParams: { createFrom?: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

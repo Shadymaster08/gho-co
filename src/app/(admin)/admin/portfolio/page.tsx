@@ -5,7 +5,7 @@ import PortfolioClient from './PortfolioClient'
 export const metadata = { title: 'Portfolio — Admin' }
 
 export default async function AdminPortfolioPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

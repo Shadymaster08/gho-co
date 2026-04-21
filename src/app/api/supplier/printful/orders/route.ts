@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { printfulPost } from '@/lib/printful/client'
 
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()

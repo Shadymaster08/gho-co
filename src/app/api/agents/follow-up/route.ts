@@ -17,7 +17,7 @@ const HOURS_48 = 48 * 60 * 60 * 1000
 const DAYS_3   = 3  * 24 * 60 * 60 * 1000
 
 export async function GET(request: Request) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

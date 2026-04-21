@@ -55,7 +55,62 @@ export function normalizeShirtConfig(config: any): { color_groups: ColorGroup[] 
   }
 }
 
+const STYLE_NAMES: Record<string, string> = {
+  tshirt: 'T-Shirt', longsleeve: 'Long Sleeve', crewneck: 'Crewneck',
+  hoodie: 'Hoodie', ziphoodie: 'Zip Hoodie',
+}
+
 export function calcShirtOrder(config: any): PricingResult {
+  const dtfFront = (config.dtf_front_width ?? 0) * (config.dtf_front_height ?? 0) * 0.02
+  const dtfBack  = (config.dtf_back_width  ?? 0) * (config.dtf_back_height  ?? 0)  * 0.02
+  const hasDtf = dtfFront > 0 || dtfBack > 0
+  const dtfDesc = hasDtf
+    ? ` + DTF (${dtfFront > 0 ? `front ${config.dtf_front_width}"×${config.dtf_front_height}"` : ''}${dtfBack > 0 ? ` back ${config.dtf_back_width}"×${config.dtf_back_height}"` : ''})`
+    : ' + DTF transfer (size not specified)'
+  const notes = !hasDtf ? 'DTF print dimensions were not provided — update DTF costs before sending.' : ''
+
+  // Multi-style format
+  if (Array.isArray(config.style_groups) && config.style_groups.length > 0) {
+    let totalCostCents = 0
+    let totalQty = 0
+    const styleDescParts: string[] = []
+
+    for (const sg of config.style_groups) {
+      const style = sg.shirt_style ?? 'tshirt'
+      const colorGroups: ColorGroup[] = sg.color_groups ?? []
+      const allSizes = colorGroups.flatMap((g: any) => g.sizes)
+      const qty = allSizes.reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
+      if (qty === 0) continue
+
+      const baseUnitCost = SHIRT_STYLE_COSTS[style] ?? 3.10
+      const totalUpcharge = allSizes.reduce((sum: number, sz: any) => sum + (SHIRT_SIZE_UPCHARGE[sz.size] ?? 0) * sz.quantity, 0)
+      const avgUpcharge = totalUpcharge / qty
+      const unitMaterial = baseUnitCost + avgUpcharge + dtfFront + dtfBack
+      const subtotal = unitMaterial * qty + (qty / SHIRTS_PER_HOUR) * LABOR_RATE
+      totalCostCents += Math.round((subtotal + subtotal * OVERHEAD_RATE) * 100)
+      totalQty += qty
+
+      const colorSummary = colorGroups.length === 1
+        ? colorGroups[0].color
+        : colorGroups.map((g: any) => {
+            const gQty = g.sizes.reduce((s: number, sz: any) => s + sz.quantity, 0)
+            return `${g.color} ×${gQty}`
+          }).join(', ')
+      styleDescParts.push(`${STYLE_NAMES[style] ?? style} ×${qty} (${colorSummary})`)
+    }
+
+    if (totalQty === 0) {
+      return { costCents: 0, priceCents: 0, description: 'Custom apparel', notes: 'No quantities specified — please review.' }
+    }
+    return {
+      costCents: totalCostCents,
+      priceCents: applyMargin(totalCostCents),
+      description: `Custom apparel ×${totalQty}: ${styleDescParts.join(' + ')} — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
+      notes,
+    }
+  }
+
+  // Single-style format (legacy)
   const { color_groups } = normalizeShirtConfig(config)
   const allSizes = color_groups.flatMap(g => g.sizes)
   const qty = allSizes.reduce((s, sz) => s + (sz.quantity ?? 0), 0)
@@ -66,27 +121,12 @@ export function calcShirtOrder(config: any): PricingResult {
 
   const style = config.shirt_style ?? 'tshirt'
   const baseUnitCost = SHIRT_STYLE_COSTS[style] ?? 3.10
-
   const totalUpcharge = allSizes.reduce((sum, sz) => sum + (SHIRT_SIZE_UPCHARGE[sz.size] ?? 0) * sz.quantity, 0)
   const avgUpcharge = totalUpcharge / qty
-
-  const dtfFront = (config.dtf_front_width ?? 0) * (config.dtf_front_height ?? 0) * 0.02
-  const dtfBack  = (config.dtf_back_width  ?? 0) * (config.dtf_back_height  ?? 0)  * 0.02
-
-  const unitMaterial   = baseUnitCost + avgUpcharge + dtfFront + dtfBack
-  const totalMaterial  = unitMaterial * qty
-  const labor          = (qty / SHIRTS_PER_HOUR) * LABOR_RATE
-  const subtotal       = totalMaterial + labor
-  const overhead       = subtotal * OVERHEAD_RATE
-  const totalCost      = subtotal + overhead
-  const costCents      = Math.round(totalCost * 100)
-  const priceCents     = applyMargin(costCents)
-
-  const styleName = style.charAt(0).toUpperCase() + style.slice(1)
-  const hasDtf = dtfFront > 0 || dtfBack > 0
-  const dtfDesc = hasDtf
-    ? ` + DTF (${dtfFront > 0 ? `front ${config.dtf_front_width}"×${config.dtf_front_height}"` : ''}${dtfBack > 0 ? ` back ${config.dtf_back_width}"×${config.dtf_back_height}"` : ''})`
-    : ' + DTF transfer (size not specified)'
+  const unitMaterial = baseUnitCost + avgUpcharge + dtfFront + dtfBack
+  const subtotal = unitMaterial * qty + (qty / SHIRTS_PER_HOUR) * LABOR_RATE
+  const costCents = Math.round((subtotal + subtotal * OVERHEAD_RATE) * 100)
+  const priceCents = applyMargin(costCents)
 
   const colorSummary = color_groups.length === 1
     ? color_groups[0].color
@@ -95,14 +135,10 @@ export function calcShirtOrder(config: any): PricingResult {
         return `${g.color} ×${groupQty}`
       }).join(', ')
 
-  const notes = !hasDtf
-    ? 'DTF print dimensions were not provided — update DTF costs before sending.'
-    : ''
-
   return {
     costCents,
     priceCents,
-    description: `Custom ${styleName} ×${qty} (${colorSummary}) — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
+    description: `Custom ${STYLE_NAMES[style] ?? style} ×${qty} (${colorSummary}) — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
     notes,
   }
 }

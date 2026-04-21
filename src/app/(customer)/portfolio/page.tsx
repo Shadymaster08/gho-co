@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function PortfolioPage() {
   const supabase = createServiceClient()
-  const locale = getLocale()
+  const locale = await getLocale()
   const T = t(locale)
   const p = T.portfolio
   const nav = T.nav

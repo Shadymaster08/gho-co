@@ -14,7 +14,7 @@ const PROMPTS: Record<string, string> = {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -115,7 +115,11 @@ export async function POST(request: Request) {
     if (productType === 'shirt') {
       const styleLabel = shirtStyle ? SHIRT_STYLE_LABELS[shirtStyle] ?? shirtStyle : 'garment'
       const sideLabel = shirtSide ?? 'front'
-      basePrompt = `This is the ${sideLabel} of a ${styleLabel}. Preserve this exact view — do not rotate, flip or show the other side. ` + basePrompt
+      const isBack = sideLabel === 'back'
+      const viewLock = isBack
+        ? `CRITICAL: The input image shows the BACK of the garment. You MUST output the back view only. Do NOT flip, rotate, or switch to the front. The back of the ${styleLabel} must remain facing the camera exactly as in the input photo. `
+        : `CRITICAL: The input image shows the FRONT of the garment. You MUST output the front view only. Do NOT flip or rotate. The front of the ${styleLabel} must remain facing the camera exactly as in the input photo. `
+      basePrompt = viewLock + basePrompt + (isBack ? ` OUTPUT MUST SHOW THE BACK OF THE GARMENT — same orientation as input.` : ` OUTPUT MUST SHOW THE FRONT OF THE GARMENT — same orientation as input.`)
     }
     const fullPrompt = productDescription !== 'a custom product'
       ? `${basePrompt} The product is: ${productDescription}.`

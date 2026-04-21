@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { CustomerNav } from '@/components/layout/CustomerNav'
 
 export default async function CustomerLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   let profile = null

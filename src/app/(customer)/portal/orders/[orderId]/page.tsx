@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { FileText, Receipt } from 'lucide-react'
 
 export default async function PortalOrderDetailPage({ params }: { params: { orderId: string } }) {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 

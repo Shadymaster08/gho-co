@@ -12,8 +12,8 @@ export const metadata: Metadata = {
   description: 'Custom shirts, 3D prints, DIY projects, and custom lighting.',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const locale = getLocale()
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const locale = await getLocale()
   return (
     <html lang={locale}>
       <body className={`${sora.variable} font-sora`}>

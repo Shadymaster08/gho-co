@@ -42,9 +42,17 @@ export interface ColorGroup {
   sizes: ShirtSize[]
 }
 
-export interface ShirtConfig {
+export interface StyleGroup {
   shirt_style: ShirtStyle
   color_groups: ColorGroup[]
+}
+
+export interface ShirtConfig {
+  // Multi-style (new) — takes precedence when present
+  style_groups?: StyleGroup[]
+  // Legacy single-style — kept for backward compat
+  shirt_style?: ShirtStyle
+  color_groups?: ColorGroup[]
   front_file_path: string | null
   back_file_path: string | null
   front_file_url: string | null

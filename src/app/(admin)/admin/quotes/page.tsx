@@ -8,7 +8,7 @@ import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 export const metadata = { title: 'Quotes — Gho&Co Admin' }
 
 export default async function AdminQuotesPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
