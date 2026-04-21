@@ -20,15 +20,15 @@ export interface ShirtMockupProps {
 // Template images are 307 × 420 px. Print-area center in template pixels.
 // PX_PER_INCH converts DTF inches → template pixel units for artwork sizing.
 const TEMPLATE_W = 307
-const TEMPLATE_H = 420
+const TEMPLATE_H = 450
 const PX_PER_INCH = 10
 
 const TEMPLATE_META: Record<string, { frontCenterY: number; backCenterY: number }> = {
-  tshirt:     { frontCenterY: 170, backCenterY: 160 },
-  longsleeve: { frontCenterY: 170, backCenterY: 160 },
-  crewneck:   { frontCenterY: 185, backCenterY: 168 },
-  hoodie:     { frontCenterY: 200, backCenterY: 168 },
-  ziphoodie:  { frontCenterY: 200, backCenterY: 168 },
+  tshirt:     { frontCenterY: 185, backCenterY: 175 },
+  longsleeve: { frontCenterY: 185, backCenterY: 175 },
+  crewneck:   { frontCenterY: 195, backCenterY: 178 },
+  hoodie:     { frontCenterY: 210, backCenterY: 178 },
+  ziphoodie:  { frontCenterY: 210, backCenterY: 178 },
 }
 
 function isLight(hex: string) {
