@@ -2,7 +2,8 @@
 
 import { getColorHex } from '@/lib/supplier/fabrik-catalog'
 import { normalizeShirtConfig } from '@/lib/pricing'
-import { useState, useId } from 'react'
+import { useState, useId, useRef, useEffect } from 'react'
+import { RotateCcw, Move } from 'lucide-react'
 
 export interface ShirtMockupProps {
   shirtStyle?: string
@@ -20,6 +21,8 @@ const PX_PER_IN = 10
 
 type ShapeConfig = { body: string; collar: string; artCenterY: number }
 
+// All garment silhouettes use viewBox "0 0 300 360".
+// Crewneck, hoodie, and ziphoodie have full-length sleeves tapering to wrist.
 const SHAPES: Record<string, ShapeConfig> = {
   tshirt: {
     body: 'M 118,42 Q 150,20 182,42 L 230,58 L 280,82 L 278,120 L 238,130 L 238,338 L 62,338 L 62,130 L 22,120 L 20,82 L 70,58 Z',
@@ -32,19 +35,21 @@ const SHAPES: Record<string, ShapeConfig> = {
     artCenterY: 200,
   },
   crewneck: {
-    body: 'M 110,52 Q 150,28 190,52 L 234,68 L 278,92 L 276,132 L 238,142 L 238,338 L 62,338 L 62,142 L 24,132 L 22,92 L 66,68 Z',
-    collar: 'M 110,52 Q 150,28 190,52 Q 186,82 150,84 Q 114,82 110,52 Z',
-    artCenterY: 205,
+    // Wide crew collar, long sleeves
+    body: 'M 108,56 Q 150,30 192,56 L 234,72 L 272,94 L 284,308 L 254,314 L 238,144 L 62,144 L 46,314 L 16,308 L 28,94 L 66,72 Z',
+    collar: 'M 108,56 Q 150,30 192,56 Q 188,86 150,88 Q 112,86 108,56 Z',
+    artCenterY: 212,
   },
   hoodie: {
-    body: 'M 112,62 Q 82,30 60,14 Q 96,4 150,4 Q 204,4 240,14 Q 218,30 188,62 L 234,76 L 278,100 L 276,140 L 238,150 L 238,338 L 62,338 L 62,150 L 24,140 L 22,100 L 66,76 Z',
+    // Hood rises from shoulders; long sleeves tapering to wrist; kangaroo pocket rendered separately
+    body: 'M 112,62 Q 82,30 60,14 Q 96,4 150,4 Q 204,4 240,14 Q 218,30 188,62 L 234,76 L 272,98 L 284,316 L 254,322 L 238,150 L 62,150 L 46,322 L 16,316 L 28,98 L 66,76 Z',
     collar: 'M 112,62 Q 150,44 188,62 Q 184,90 150,92 Q 116,90 112,62 Z',
-    artCenterY: 200,
+    artCenterY: 205,
   },
   ziphoodie: {
-    body: 'M 112,62 Q 82,30 60,14 Q 96,4 150,4 Q 204,4 240,14 Q 218,30 188,62 L 234,76 L 278,100 L 276,140 L 238,150 L 238,338 L 62,338 L 62,150 L 24,140 L 22,100 L 66,76 Z',
+    body: 'M 112,62 Q 82,30 60,14 Q 96,4 150,4 Q 204,4 240,14 Q 218,30 188,62 L 234,76 L 272,98 L 284,316 L 254,322 L 238,150 L 62,150 L 46,322 L 16,316 L 28,98 L 66,76 Z',
     collar: 'M 112,62 Q 130,48 148,48 L 152,48 Q 170,48 188,62 Q 184,90 152,92 L 148,92 Q 116,90 112,62 Z',
-    artCenterY: 200,
+    artCenterY: 205,
   },
 }
 
@@ -73,7 +78,69 @@ export function ShirtMockup({
   className = '',
 }: ShirtMockupProps) {
   const uid = useId().replace(/:/g, '')
+  const svgRef = useRef<SVGSVGElement>(null)
+
   const [side, setSide] = useState<'front' | 'back'>('front')
+  const [frontOffset, setFrontOffset] = useState({ x: 0, y: 0 })
+  const [backOffset, setBackOffset] = useState({ x: 0, y: 0 })
+
+  // Refs so event handlers never capture stale closures
+  const draggingRef = useRef(false)
+  const sideRef = useRef<'front' | 'back'>('front')
+  const frontOffRef = useRef({ x: 0, y: 0 })
+  const backOffRef = useRef({ x: 0, y: 0 })
+  const dragAnchor = useRef({ svgX: 0, svgY: 0, offX: 0, offY: 0 })
+
+  useEffect(() => { sideRef.current = side }, [side])
+  useEffect(() => { frontOffRef.current = frontOffset }, [frontOffset])
+  useEffect(() => { backOffRef.current = backOffset }, [backOffset])
+
+  function toSVGCoords(clientX: number, clientY: number) {
+    const svg = svgRef.current
+    if (!svg) return { x: 0, y: 0 }
+    const pt = svg.createSVGPoint()
+    pt.x = clientX; pt.y = clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return { x: 0, y: 0 }
+    const r = pt.matrixTransform(ctm.inverse())
+    return { x: r.x, y: r.y }
+  }
+
+  function startDrag(clientX: number, clientY: number) {
+    draggingRef.current = true
+    const { x, y } = toSVGCoords(clientX, clientY)
+    const off = sideRef.current === 'front' ? frontOffRef.current : backOffRef.current
+    dragAnchor.current = { svgX: x, svgY: y, offX: off.x, offY: off.y }
+  }
+
+  // Global listeners attached once — access everything via refs
+  useEffect(() => {
+    function move(clientX: number, clientY: number) {
+      if (!draggingRef.current) return
+      const { x, y } = toSVGCoords(clientX, clientY)
+      const newOff = {
+        x: dragAnchor.current.offX + (x - dragAnchor.current.svgX),
+        y: dragAnchor.current.offY + (y - dragAnchor.current.svgY),
+      }
+      if (sideRef.current === 'front') setFrontOffset(newOff)
+      else setBackOffset(newOff)
+    }
+    const mm = (e: MouseEvent) => move(e.clientX, e.clientY)
+    const mu = () => { draggingRef.current = false }
+    const tm = (e: TouchEvent) => { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY) }
+    const te = () => { draggingRef.current = false }
+
+    window.addEventListener('mousemove', mm)
+    window.addEventListener('mouseup', mu)
+    window.addEventListener('touchmove', tm, { passive: false })
+    window.addEventListener('touchend', te)
+    return () => {
+      window.removeEventListener('mousemove', mm)
+      window.removeEventListener('mouseup', mu)
+      window.removeEventListener('touchmove', tm)
+      window.removeEventListener('touchend', te)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const shape = SHAPES[shirtStyle] ?? SHAPES.tshirt
   const hex = getColorHex(color) ?? '#d0d0d0'
@@ -84,41 +151,61 @@ export function ShirtMockup({
   const artUrl = isFront ? frontArtworkUrl : backArtworkUrl
   const artW = Number((isFront ? dtfFrontWidth : dtfBackWidth) ?? 12)
   const artH = Number((isFront ? dtfFrontHeight : dtfBackHeight) ?? 12)
+  const offset = isFront ? frontOffset : backOffset
+  const isOffsetZero = offset.x === 0 && offset.y === 0
 
   const svgArtW = artW * PX_PER_IN
   const svgArtH = artH * PX_PER_IN
-  const artX = 150 - svgArtW / 2
-  const artY = shape.artCenterY - svgArtH / 2
+  // Base position: horizontally centered, vertically at chest center
+  const baseX = 150 - svgArtW / 2
+  const baseY = shape.artCenterY - svgArtH / 2
+  const artX = baseX + offset.x
+  const artY = baseY + offset.y
 
   const collarFill = adjustBrightness(hex, light ? 0.78 : 1.35)
   const outlineColor = light ? '#b8b8b8' : adjustBrightness(hex, 0.55)
+  const hasInteractiveArtwork = !!(artUrl)
 
   return (
     <div className={`flex flex-col items-center gap-2 select-none ${className}`}>
-      {hasBothSides && (
-        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
-          {(['front', 'back'] as const).map(s => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSide(s)}
-              className={`px-3 py-1.5 font-medium capitalize transition-colors ${
-                side === s ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Controls row */}
+      <div className="flex items-center gap-2">
+        {hasBothSides && (
+          <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
+            {(['front', 'back'] as const).map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSide(s)}
+                className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+                  side === s ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        {!isOffsetZero && (
+          <button
+            type="button"
+            onClick={() => isFront ? setFrontOffset({ x: 0, y: 0 }) : setBackOffset({ x: 0, y: 0 })}
+            className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-500 hover:text-gray-800"
+          >
+            <RotateCcw className="h-3 w-3" /> Reset
+          </button>
+        )}
+      </div>
 
       <svg
+        ref={svgRef}
         viewBox="0 0 300 360"
         xmlns="http://www.w3.org/2000/svg"
         className="w-full max-w-[260px]"
         style={{ filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.18))' }}
       >
         <defs>
+          {/* Clip shading/collar to shirt outline only */}
           <clipPath id={`sc-${uid}`}>
             <path d={shape.body} />
           </clipPath>
@@ -134,60 +221,78 @@ export function ShirtMockup({
           </linearGradient>
         </defs>
 
-        {/* Shirt body */}
+        {/* 1 — Shirt body fill */}
         <path d={shape.body} fill={hex} />
 
-        {/* Artwork or placeholder */}
-        <g clipPath={`url(#sc-${uid})`}>
-          {artUrl ? (
-            <image
-              href={artUrl}
+        {/* 2 — Artwork (NOT clipped — user can drag freely; shading overlays on top give depth) */}
+        {artUrl ? (
+          <image
+            href={artUrl}
+            x={artX} y={artY}
+            width={svgArtW} height={svgArtH}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ cursor: draggingRef.current ? 'grabbing' : 'grab' }}
+            onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
+            onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
+          />
+        ) : (
+          // Placeholder: dashed outline showing print area
+          <g>
+            <rect
               x={artX} y={artY}
               width={svgArtW} height={svgArtH}
-              preserveAspectRatio="xMidYMid meet"
+              fill="none"
+              stroke={light ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.25)'}
+              strokeWidth="1"
+              strokeDasharray="5 3"
+              rx="2"
             />
-          ) : (
-            <>
-              <rect
-                x={artX} y={artY}
-                width={svgArtW} height={svgArtH}
-                fill="none"
-                stroke={light ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.25)'}
-                strokeWidth="1"
-                strokeDasharray="5 3"
-                rx="2"
-              />
-              <text
-                x={150} y={shape.artCenterY}
-                textAnchor="middle" dominantBaseline="middle"
-                fill={light ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.38)'}
-                fontSize="9"
-                fontFamily="system-ui, sans-serif"
-              >
-                {artW}″ × {artH}″
-              </text>
-            </>
-          )}
+            <text
+              x={150 + offset.x} y={shape.artCenterY + offset.y}
+              textAnchor="middle" dominantBaseline="middle"
+              fill={light ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.38)'}
+              fontSize="9"
+              fontFamily="system-ui, sans-serif"
+            >
+              {artW}″ × {artH}″
+            </text>
+          </g>
+        )}
+
+        {/* Subtle artwork border (visible even when outside shirt) */}
+        {artUrl && (
+          <rect
+            x={artX} y={artY}
+            width={svgArtW} height={svgArtH}
+            fill="none"
+            stroke={light ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.18)'}
+            strokeWidth="0.6"
+            strokeDasharray="4 3"
+            rx="1"
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+
+        {/* 3 — Shading overlays clipped to shirt body (drape effect over artwork) */}
+        <g clipPath={`url(#sc-${uid})`}>
+          <path d={shape.body} fill={`url(#gh-${uid})`} />
+          <path d={shape.body} fill={`url(#gv-${uid})`} />
         </g>
 
-        {/* Shading overlays */}
-        <path d={shape.body} fill={`url(#gh-${uid})`} />
-        <path d={shape.body} fill={`url(#gv-${uid})`} />
-
-        {/* Collar */}
+        {/* 4 — Collar */}
         <path d={shape.collar} fill={collarFill} />
 
-        {/* Kangaroo pocket */}
+        {/* 5 — Kangaroo pocket (hoodie / ziphoodie) */}
         {(shirtStyle === 'hoodie' || shirtStyle === 'ziphoodie') && (
           <rect
-            x={104} y={250} width={92} height={54} rx={10}
+            x={104} y={250} width={92} height={56} rx={10}
             fill={adjustBrightness(hex, light ? 0.88 : 1.18)}
             stroke={adjustBrightness(hex, light ? 0.78 : 1.35)}
             strokeWidth="0.8"
           />
         )}
 
-        {/* Zipper */}
+        {/* 6 — Zipper */}
         {shirtStyle === 'ziphoodie' && (
           <line
             x1="150" y1="92" x2="150" y2="338"
@@ -196,13 +301,21 @@ export function ShirtMockup({
           />
         )}
 
-        {/* Outline */}
+        {/* 7 — Outline */}
         <path d={shape.body} fill="none" stroke={outlineColor} strokeWidth="0.8" />
       </svg>
 
-      <p className="text-xs text-gray-400 text-center">
-        {isFront ? 'Front' : 'Back'} · {color} · {artUrl ? `${artW}″ × ${artH}″ DTF` : 'no artwork uploaded'}
-      </p>
+      {/* Info / drag hint */}
+      <div className="flex flex-col items-center gap-0.5">
+        <p className="text-xs text-gray-400 text-center">
+          {isFront ? 'Front' : 'Back'} · {color} · {artUrl ? `${artW}″ × ${artH}″ DTF` : 'no artwork uploaded'}
+        </p>
+        {hasInteractiveArtwork && (
+          <p className="flex items-center gap-1 text-xs text-gray-300">
+            <Move className="h-3 w-3" /> Drag to reposition
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -256,7 +369,7 @@ export function ShirtMockupCard({ config, className = '' }: ShirtMockupCardProps
 
       {styleGroups.length > 1 && (
         <p className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">
-          Multi-style order — showing dominant style ({SHIRT_STYLE_LABELS[shirtStyle] ?? shirtStyle})
+          Multi-style order — showing {SHIRT_STYLE_LABELS[shirtStyle] ?? shirtStyle} (dominant qty)
         </p>
       )}
 
