@@ -12,6 +12,7 @@ import { formatDate, formatDateTime, productTypeLabel } from '@/lib/utils'
 import { useRouter, useParams } from 'next/navigation'
 import type { Order, OrderStatus } from '@/types'
 import { normalizeShirtConfig } from '@/lib/pricing'
+import { ShirtMockupCard } from '@/components/orders/ShirtMockup'
 
 const SHIRT_STYLE_LABELS: Record<string, string> = {
   tshirt: 'T-Shirt', longsleeve: 'Long Sleeve', crewneck: 'Crewneck',
@@ -275,6 +276,12 @@ export default function AdminOrderDetailPage() {
 
         {/* Sidebar */}
         <div className="flex flex-col gap-6">
+          {order.product_type === 'shirt' && (
+            <Card header={<span className="font-semibold text-gray-900">Mockup preview</span>}>
+              <ShirtMockupCard config={config} />
+            </Card>
+          )}
+
           <Card header={<span className="font-semibold text-gray-900">Status timeline</span>}>
             <OrderStatusTimeline currentStatus={order.status} updatedAt={order.updated_at} />
           </Card>

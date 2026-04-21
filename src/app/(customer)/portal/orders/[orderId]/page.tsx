@@ -6,6 +6,7 @@ import { OrderStatusTimeline } from '@/components/orders/OrderStatusTimeline'
 import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 import Link from 'next/link'
 import { FileText, Receipt } from 'lucide-react'
+import { ShirtMockupCard } from '@/components/orders/ShirtMockup'
 
 export default async function PortalOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params
@@ -98,8 +99,14 @@ export default async function PortalOrderDetailPage({ params }: { params: Promis
           )}
         </div>
 
-        {/* Timeline */}
-        <div>
+        {/* Sidebar */}
+        <div className="flex flex-col gap-6">
+          {order.product_type === 'shirt' && order.configuration && (
+            <Card header={<span className="font-semibold text-gray-900">Your design</span>}>
+              <ShirtMockupCard config={order.configuration} />
+            </Card>
+          )}
+
           <Card header={<span className="font-semibold text-gray-900">Order status</span>}>
             <OrderStatusTimeline currentStatus={order.status} updatedAt={order.updated_at} />
           </Card>
