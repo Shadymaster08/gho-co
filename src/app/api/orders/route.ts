@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { product_type, configuration, customer_notes } = body
+  const { product_type, configuration, customer_notes, billing } = body
 
   if (!product_type || !configuration) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
       product_type,
       configuration,
       customer_notes: customer_notes ?? null,
+      billing: billing ?? null,
     })
     .select()
     .single()
@@ -30,6 +31,20 @@ export async function POST(request: Request) {
   if (error) {
     console.error('Order insert error:', error)
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 })
+  }
+
+  // Save billing info back to profile so future orders pre-fill (non-blocking)
+  if (billing) {
+    supabase.from('profiles').update({
+      full_name:    billing.full_name    || null,
+      phone:        billing.phone        || null,
+      address_line1: billing.address_line1 || null,
+      address_line2: billing.address_line2 || null,
+      city:         billing.city         || null,
+      province:     billing.province     || null,
+      postal_code:  billing.postal_code  || null,
+      country:      billing.country      || null,
+    }).eq('id', user.id).then(() => {})
   }
 
   // Send confirmation email (non-blocking)

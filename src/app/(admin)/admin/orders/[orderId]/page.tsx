@@ -187,6 +187,28 @@ export default function AdminOrderDetailPage() {
             )}
           </Card>
 
+          {/* Billing */}
+          {order.billing && (
+            <Card header={<span className="font-semibold text-gray-900">Billing information</span>}>
+              <div className="grid gap-1 text-sm">
+                {order.billing.full_name && <p><span className="text-gray-400 w-28 inline-block">Name</span>{order.billing.full_name}</p>}
+                {order.billing.phone && <p><span className="text-gray-400 w-28 inline-block">Phone</span>{order.billing.phone}</p>}
+                {order.billing.address_line1 && (
+                  <p><span className="text-gray-400 w-28 inline-block">Address</span>
+                    {order.billing.address_line1}
+                    {order.billing.address_line2 ? `, ${order.billing.address_line2}` : ''}
+                  </p>
+                )}
+                {order.billing.city && (
+                  <p><span className="text-gray-400 w-28 inline-block">City</span>
+                    {order.billing.city}{order.billing.province ? `, ${order.billing.province}` : ''}{order.billing.postal_code ? `  ${order.billing.postal_code}` : ''}
+                  </p>
+                )}
+                {order.billing.country && <p><span className="text-gray-400 w-28 inline-block">Country</span>{order.billing.country}</p>}
+              </div>
+            </Card>
+          )}
+
           {/* Files */}
           {order.order_files?.length > 0 && (
             <Card header={<span className="font-semibold text-gray-900">Files</span>}>

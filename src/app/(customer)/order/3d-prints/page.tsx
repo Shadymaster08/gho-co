@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { FileDropzone } from '@/components/ui/FileDropzone'
 import { useUpload } from '@/hooks/useUpload'
+import { BillingSection } from '@/components/orders/BillingSection'
+import type { BillingData } from '@/types'
 
 // Bambu Lab filament catalogue
 const MATERIALS: Record<string, { description: string; colors: string[] }> = {
@@ -46,6 +48,7 @@ export default function PrintOrderPage() {
   const [loading, setLoading] = useState(false)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [billing, setBilling] = useState<BillingData | null>(null)
 
   const { uploadFile, progress, uploading } = useUpload()
 
@@ -61,6 +64,11 @@ export default function PrintOrderPage() {
     const errs: Record<string, string> = {}
     if (mode === 'upload' && !stlFile) errs.stl = 'Please upload an STL file'
     if (mode === 'consultation' && description.length < 10) errs.description = 'Please describe your project (min 10 characters)'
+    if (!billing?.full_name)     errs.billing_name    = 'Full name is required'
+    if (!billing?.phone)         errs.billing_phone   = 'Phone number is required'
+    if (!billing?.address_line1) errs.billing_address = 'Address is required'
+    if (!billing?.city)          errs.billing_city    = 'City is required'
+    if (!billing?.postal_code)   errs.billing_postal  = 'Postal code is required'
     return errs
   }
 
@@ -84,7 +92,7 @@ export default function PrintOrderPage() {
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_type: '3d_print', customer_notes: notes || null, configuration: config }),
+      body: JSON.stringify({ product_type: '3d_print', customer_notes: notes || null, configuration: config, billing }),
     })
 
     if (!res.ok) { toast.error('Failed to submit order.'); setLoading(false); return }
@@ -199,6 +207,17 @@ export default function PrintOrderPage() {
           value={notes}
           onChange={e => setNotes(e.target.value)}
           rows={3}
+        />
+
+        <BillingSection
+          onChange={setBilling}
+          errors={{
+            full_name:     errors.billing_name,
+            phone:         errors.billing_phone,
+            address_line1: errors.billing_address,
+            city:          errors.billing_city,
+            postal_code:   errors.billing_postal,
+          }}
         />
 
         <Button type="submit" loading={loading || uploading} size="lg">

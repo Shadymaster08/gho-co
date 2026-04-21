@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/Textarea'
 import { FileDropzone } from '@/components/ui/FileDropzone'
 import { useUpload } from '@/hooks/useUpload'
-import type { ShirtStyle } from '@/types'
+import { BillingSection } from '@/components/orders/BillingSection'
+import type { ShirtStyle, BillingData } from '@/types'
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -281,6 +282,7 @@ export default function ShirtsOrderPage() {
   const [frontFile, setFrontFile] = useState<File | null>(null)
   const [backFile, setBackFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [billing, setBilling] = useState<BillingData | null>(null)
 
   const [customOpen, setCustomOpen] = useState(false)
   const [customDesc, setCustomDesc] = useState('')
@@ -385,6 +387,11 @@ export default function ShirtsOrderPage() {
     const errs: Record<string, string> = {}
     if (totalQuantity() === 0) errs.sizes = 'Add at least 1 item in any size'
     if (!frontFile) errs.front = 'Front artwork is required'
+    if (!billing?.full_name)    errs.billing_name    = 'Full name is required'
+    if (!billing?.phone)        errs.billing_phone   = 'Phone number is required'
+    if (!billing?.address_line1) errs.billing_address = 'Address is required'
+    if (!billing?.city)         errs.billing_city    = 'City is required'
+    if (!billing?.postal_code)  errs.billing_postal  = 'Postal code is required'
     return errs
   }
 
@@ -422,7 +429,7 @@ export default function ShirtsOrderPage() {
     const draftRes = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_type: 'shirt', customer_notes: notes || null, configuration: config }),
+      body: JSON.stringify({ product_type: 'shirt', customer_notes: notes || null, configuration: config, billing }),
     })
 
     if (!draftRes.ok) {
@@ -705,6 +712,17 @@ export default function ShirtsOrderPage() {
           value={notes}
           onChange={e => setNotes(e.target.value)}
           rows={3}
+        />
+
+        <BillingSection
+          onChange={setBilling}
+          errors={{
+            full_name:     errors.billing_name,
+            phone:         errors.billing_phone,
+            address_line1: errors.billing_address,
+            city:          errors.billing_city,
+            postal_code:   errors.billing_postal,
+          }}
         />
 
         <Button type="submit" loading={loading || uploading} size="lg">

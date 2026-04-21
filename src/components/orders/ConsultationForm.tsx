@@ -8,7 +8,9 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Input } from '@/components/ui/Input'
 import { FileDropzone } from '@/components/ui/FileDropzone'
 import { useUpload } from '@/hooks/useUpload'
+import { BillingSection } from './BillingSection'
 import { X } from 'lucide-react'
+import type { BillingData } from '@/types'
 
 interface ConsultationFormProps {
   productType: 'diy' | 'lighting'
@@ -27,6 +29,7 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
   const [refFiles, setRefFiles] = useState<File[]>([])
   const [uploadedRefs, setUploadedRefs] = useState<string[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [billing, setBilling] = useState<BillingData | null>(null)
 
   const { uploadFile, progress, uploading } = useUpload()
 
@@ -43,6 +46,11 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
     e.preventDefault()
     const newErrors: Record<string, string> = {}
     if (description.length < 10) newErrors.description = 'Please describe your project in at least 10 characters'
+    if (!billing?.full_name) newErrors.billing_name = 'Full name is required'
+    if (!billing?.phone) newErrors.billing_phone = 'Phone number is required'
+    if (!billing?.address_line1) newErrors.billing_address = 'Address is required'
+    if (!billing?.city) newErrors.billing_city = 'City is required'
+    if (!billing?.postal_code) newErrors.billing_postal = 'Postal code is required'
     if (Object.keys(newErrors).length) { setErrors(newErrors); return }
 
     setLoading(true)
@@ -55,6 +63,7 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
         product_type: productType,
         customer_notes: notes || null,
         configuration: { description, dimensions: dimensions || '', reference_images: [], budget: budget || '' },
+        billing,
       }),
     })
 
@@ -167,6 +176,17 @@ export function ConsultationForm({ productType, title, descriptionPlaceholder }:
           value={notes}
           onChange={e => setNotes(e.target.value)}
           rows={3}
+        />
+
+        <BillingSection
+          onChange={setBilling}
+          errors={{
+            full_name:    errors.billing_name,
+            phone:        errors.billing_phone,
+            address_line1: errors.billing_address,
+            city:         errors.billing_city,
+            postal_code:  errors.billing_postal,
+          }}
         />
 
         <Button type="submit" loading={loading || uploading} size="lg">

@@ -24,8 +24,25 @@ export interface Profile {
   full_name: string | null
   phone: string | null
   role: Role
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  province: string | null
+  postal_code: string | null
+  country: string | null
   created_at: string
   updated_at: string
+}
+
+export interface BillingData {
+  full_name: string
+  phone: string
+  address_line1: string
+  address_line2: string
+  city: string
+  province: string
+  postal_code: string
+  country: string
 }
 
 // ---------- Order configuration shapes ----------
