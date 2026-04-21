@@ -21,8 +21,8 @@ export default async function CustomerLayout({ children }: { children: React.Rea
           Custom shirts, 3D prints, DIY projects &amp; lighting
         </p>
         <p className="mt-2 text-xs text-[#86868b]">
-          <a href="mailto:cg.designs08@gmail.com" className="hover:text-[#1d1d1f] transition-colors">
-            cg.designs08@gmail.com
+          <a href="mailto:ghoetco@gmail.com" className="hover:text-[#1d1d1f] transition-colors">
+            ghoetco@gmail.com
           </a>
         </p>
       </footer>

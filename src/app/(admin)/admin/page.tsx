@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { FollowUpFlags } from '@/components/admin/FollowUpFlags'
 import { ProfitEstimator } from '@/components/admin/ProfitEstimator'
+import { DailyDigestPanel } from '@/components/admin/DailyDigestPanel'
 import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 
 export const metadata = { title: 'Dashboard — Gho&Co Admin' }
@@ -52,6 +53,11 @@ export default async function AdminDashboardPage() {
             <p className={`mt-1 text-3xl font-bold ${color}`}>{value}</p>
           </Card>
         ))}
+      </div>
+
+      {/* Business overview */}
+      <div className="mb-8">
+        <DailyDigestPanel />
       </div>
 
       {/* Follow-up flags */}

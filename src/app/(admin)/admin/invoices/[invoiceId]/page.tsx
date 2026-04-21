@@ -7,26 +7,23 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
+import { useParams } from 'next/navigation'
 
-export default function AdminInvoiceDetailPage({ params }: { params: { invoiceId: string } }) {
+export default function AdminInvoiceDetailPage() {
+  const { invoiceId } = useParams<{ invoiceId: string }>()
   const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('invoices')
-      .select('*, orders(order_number, profiles(email, full_name))')
-      .eq('id', params.invoiceId)
-      .single()
-      .then(({ data }) => { setInvoice(data); setLoading(false) })
-  }, [params.invoiceId])
+    fetch(`/api/invoices/${invoiceId}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { setInvoice(data); setLoading(false) })
+  }, [invoiceId])
 
   async function sendInvoice() {
     setActing(true)
-    const res = await fetch(`/api/invoices/${params.invoiceId}/send`, { method: 'POST' })
+    const res = await fetch(`/api/invoices/${invoiceId}/send`, { method: 'POST' })
     if (!res.ok) toast.error('Failed to send invoice.')
     else { toast.success('Invoice sent!'); setInvoice((i: any) => ({ ...i, status: 'sent' })) }
     setActing(false)
@@ -34,7 +31,7 @@ export default function AdminInvoiceDetailPage({ params }: { params: { invoiceId
 
   async function markPaid() {
     setActing(true)
-    const res = await fetch(`/api/invoices/${params.invoiceId}`, {
+    const res = await fetch(`/api/invoices/${invoiceId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: 'paid' }),

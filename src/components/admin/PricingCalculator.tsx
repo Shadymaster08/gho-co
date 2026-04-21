@@ -3,7 +3,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { formatCurrency } from '@/lib/utils'
 import { Calculator, ExternalLink, Upload, Loader2, TrendingUp, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
 
 // 35% gross margin → multiplier = 1 / (1 - 0.35)
 const MARGIN = 0.35
@@ -246,7 +245,7 @@ function ShirtCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => voi
         description={result.description}
         quantity={quantity}
         unitLabel={`$${(unitSuggestedCents / 100).toFixed(2)}/shirt`}
-        onApply={onApply ? () => onApply(result) : undefined}
+        onApply={onApply ? (priceCents: number) => onApply({ ...result, suggestedPriceCents: priceCents }) : undefined}
       />
     </div>
   )
@@ -411,7 +410,7 @@ function PrintCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => voi
         productType="3d_print"
         description={result.description}
         quantity={quantity}
-        onApply={onApply ? () => onApply(result) : undefined}
+        onApply={onApply ? (priceCents: number) => onApply({ ...result, suggestedPriceCents: priceCents }) : undefined}
       />
     </div>
   )
@@ -466,7 +465,7 @@ function CustomCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
           productType="diy"
           description={description || 'Custom project'}
           quantity={1}
-          onApply={onApply ? () => onApply(result) : undefined}
+          onApply={onApply ? (priceCents: number) => onApply({ ...result, suggestedPriceCents: priceCents }) : undefined}
         />
       )}
     </div>
@@ -504,7 +503,7 @@ function CalcField({ label, children }: { label: string; children: React.ReactNo
 
 interface ResultRow { label: string; value: string; bold?: boolean }
 
-const SPECTRUM_DISCOUNT = 0.10   // 10% below/above recommended
+const SPECTRUM_DISCOUNT = 0.10
 
 const tiers = [
   {
@@ -562,10 +561,11 @@ function ResultCard({
   description: string
   quantity: number
   unitLabel?: string
-  onApply?: () => void
+  onApply?: (priceCents: number) => void
 }) {
   const [market, setMarket] = useState<MarketData | null>(null)
   const [loadingMarket, setLoadingMarket] = useState(false)
+  const [selectedTierKey, setSelectedTierKey] = useState<string | null>(null)
 
   async function fetchMarket() {
     setLoadingMarket(true)
@@ -606,12 +606,14 @@ function ResultCard({
         <div className="grid grid-cols-3 gap-2">
           {tiers.map(tier => {
             const priceCents = Math.round(suggestedCents * tier.multiplier)
+            const isSelected = selectedTierKey === tier.key
             return (
               <div
                 key={tier.key}
-                className={`flex flex-col items-center rounded-lg border ${tier.border} ${tier.bg} p-2.5 text-center`}
+                onClick={onApply ? () => setSelectedTierKey(tier.key) : undefined}
+                className={`flex flex-col items-center rounded-lg border p-2.5 text-center transition-all ${tier.bg} ${isSelected ? `ring-2 ring-offset-1 ring-indigo-500 border-indigo-400` : tier.border} ${onApply ? 'cursor-pointer hover:opacity-90' : ''}`}
               >
-                <span className="mb-1 text-base">{tier.icon}</span>
+                <span className="mb-1 text-base">{isSelected ? '✓' : tier.icon}</span>
                 <p className={`text-[11px] font-semibold leading-tight ${tier.text}`}>{tier.label}</p>
                 <p className={`mt-1 text-sm font-bold ${tier.text}`}>{formatCurrency(priceCents)}</p>
                 <span className={`mt-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${tier.badge}`}>
@@ -621,6 +623,20 @@ function ResultCard({
             )
           })}
         </div>
+
+        {onApply && selectedTierKey && (() => {
+          const tier = tiers.find(t => t.key === selectedTierKey)!
+          const priceCents = Math.round(suggestedCents * tier.multiplier)
+          return (
+            <button
+              type="button"
+              onClick={() => onApply(priceCents)}
+              className="mt-3 w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              Apply {tier.label} — {formatCurrency(priceCents)}
+            </button>
+          )
+        })()}
 
         <p className="mt-2 text-center text-xs text-green-700">
           Profit at recommended: {formatCurrency(profitCentsVal)} ({(MARGIN * 100).toFixed(0)}% margin)
@@ -710,11 +726,6 @@ function ResultCard({
         )}
       </div>
 
-      {onApply && suggestedCents > 0 && (
-        <Button size="sm" className="mt-3 w-full" onClick={onApply}>
-          Apply recommended price to quote
-        </Button>
-      )}
     </div>
   )
 }

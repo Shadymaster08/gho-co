@@ -7,9 +7,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ quot
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: quote, error } = await supabase
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const client = profile?.role === 'admin' ? createServiceClient() : supabase
+
+  const { data: quote, error } = await client
     .from('quotes')
-    .select('*, orders(*)')
+    .select('*, orders(order_number, product_type, configuration, profiles(email, full_name))')
     .eq('id', quoteId)
     .single()
 
@@ -57,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ qu
   }
 
   // Admin full update
-  const { line_items, tax_rate, valid_until, notes, internal_notes, status } = body
+  const { line_items, tax_rate, valid_until, notes, internal_notes, status, material_cost_cents } = body
   const update: Record<string, unknown> = {}
 
   if (line_items !== undefined) {
@@ -74,6 +77,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ qu
   if (notes !== undefined) update.notes = notes
   if (internal_notes !== undefined) update.internal_notes = internal_notes
   if (status !== undefined) update.status = status
+  if (material_cost_cents !== undefined) update.material_cost_cents = material_cost_cents
 
   const { data, error } = await supabase.from('quotes').update(update).eq('id', quoteId).select().single()
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })

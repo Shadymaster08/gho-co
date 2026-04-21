@@ -78,6 +78,78 @@ export interface PricingResult {
   notes: string
 }
 
+// ── Shirt line items (one per style group, with unit price) ──────────────────
+
+export interface ShirtLineItem {
+  description: string
+  quantity: number
+  unitCostCents: number   // cost per shirt (internal)
+  unitPriceCents: number  // price per shirt (to customer)
+}
+
+export interface ShirtLineItemsResult {
+  items: ShirtLineItem[]
+  dtfDesc: string
+  notes: string
+}
+
+export function calcShirtLineItems(config: any, prices?: LivePrices): ShirtLineItemsResult {
+  const styleCosts = prices?.shirtStyles ?? SHIRT_STYLE_COSTS
+  const dtfRate    = prices?.dtfPerSqIn  ?? 0.02
+
+  const dtfFront = (config.dtf_front_width ?? 0) * (config.dtf_front_height ?? 0) * dtfRate
+  const dtfBack  = (config.dtf_back_width  ?? 0) * (config.dtf_back_height  ?? 0) * dtfRate
+  const hasDtf   = dtfFront > 0 || dtfBack > 0
+
+  const dtfDesc = hasDtf
+    ? `DTF (${[
+        config.dtf_front_width ? `front ${config.dtf_front_width}"×${config.dtf_front_height}"` : '',
+        config.dtf_back_width  ? `back ${config.dtf_back_width}"×${config.dtf_back_height}"` : '',
+      ].filter(Boolean).join(', ')})`
+    : 'DTF (size not specified)'
+
+  const notes = !hasDtf ? 'DTF print dimensions were not provided — update DTF costs before sending.' : ''
+
+  const rawGroups: Array<{ shirt_style: string; color_groups: ColorGroup[] }> =
+    Array.isArray(config.style_groups) && config.style_groups.length > 0
+      ? config.style_groups
+      : [{ shirt_style: config.shirt_style ?? 'tshirt', color_groups: normalizeShirtConfig(config).color_groups }]
+
+  const items: ShirtLineItem[] = []
+
+  for (const sg of rawGroups) {
+    const style      = sg.shirt_style ?? 'tshirt'
+    const colorGroups: ColorGroup[] = sg.color_groups ?? []
+    const allSizes   = colorGroups.flatMap(g => g.sizes)
+    const qty        = allSizes.reduce((s, sz) => s + (sz.quantity ?? 0), 0)
+    if (qty === 0) continue
+
+    const baseUnitCost   = styleCosts[style] ?? 3.10
+    const totalUpcharge  = allSizes.reduce((s, sz) => s + (SHIRT_SIZE_UPCHARGE[sz.size] ?? 0) * (sz.quantity ?? 0), 0)
+    const avgUpcharge    = totalUpcharge / qty
+    const laborPerShirt  = LABOR_RATE / SHIRTS_PER_HOUR
+    const unitCost       = (baseUnitCost + avgUpcharge + dtfFront + dtfBack + laborPerShirt) * (1 + OVERHEAD_RATE)
+    const unitCostCents  = Math.round(unitCost * 100)
+    const unitPriceCents = applyMargin(unitCostCents)
+
+    const colorSummary = colorGroups.length === 1
+      ? colorGroups[0].color
+      : colorGroups.map(g => {
+          const gQty = g.sizes.reduce((s, sz) => s + (sz.quantity ?? 0), 0)
+          return `${g.color} ×${gQty}`
+        }).join(', ')
+
+    items.push({
+      description: `Custom ${STYLE_NAMES[style] ?? style} — ${colorSummary}`,
+      quantity: qty,
+      unitCostCents,
+      unitPriceCents,
+    })
+  }
+
+  return { items, dtfDesc, notes }
+}
+
 // ── Shirt order ───────────────────────────────────────────────────────────────
 
 export function normalizeShirtConfig(config: any): { color_groups: ColorGroup[] } {

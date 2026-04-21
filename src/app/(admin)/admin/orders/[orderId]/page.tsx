@@ -9,8 +9,7 @@ import { Card } from '@/components/ui/Card'
 import { DeleteButton } from '@/components/admin/DeleteButton'
 import { OrderStatusTimeline } from '@/components/orders/OrderStatusTimeline'
 import { formatDate, formatDateTime, productTypeLabel } from '@/lib/utils'
-import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import type { Order, OrderStatus } from '@/types'
 import { normalizeShirtConfig } from '@/lib/pricing'
 
@@ -93,8 +92,9 @@ const ALL_STATUSES: OrderStatus[] = [
   'in_production', 'shipped', 'complete', 'cancelled',
 ]
 
-export default function AdminOrderDetailPage({ params }: { params: { orderId: string } }) {
+export default function AdminOrderDetailPage() {
   const router = useRouter()
+  const { orderId } = useParams<{ orderId: string }>()
   const [order, setOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -103,13 +103,9 @@ export default function AdminOrderDetailPage({ params }: { params: { orderId: st
   const [status, setStatus] = useState<OrderStatus>('received')
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase
-      .from('orders')
-      .select('*, profiles(full_name, email), order_files(*), quotes(*), invoices(*)')
-      .eq('id', params.orderId)
-      .single()
-      .then(({ data }) => {
+    fetch(`/api/orders/${orderId}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
         if (data) {
           setOrder(data)
           setAdminNotes(data.admin_notes ?? '')
@@ -117,11 +113,11 @@ export default function AdminOrderDetailPage({ params }: { params: { orderId: st
         }
         setLoading(false)
       })
-  }, [params.orderId])
+  }, [orderId])
 
   async function saveChanges() {
     setSaving(true)
-    const res = await fetch(`/api/orders/${params.orderId}`, {
+    const res = await fetch(`/api/orders/${orderId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status, admin_notes: adminNotes }),
@@ -142,7 +138,7 @@ export default function AdminOrderDetailPage({ params }: { params: { orderId: st
     const res = await fetch('/api/agents/quote-draft', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: params.orderId }),
+      body: JSON.stringify({ order_id: orderId }),
     })
     if (!res.ok) {
       toast.error('Failed to generate quote.')

@@ -8,6 +8,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ orde
 
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin'
+
+  const service = createServiceClient()
+
+  if (isAdmin) {
+    // Admin: fetch any order bypassing RLS
+    const { data: order, error } = await service
+      .from('orders')
+      .select('*, profiles(email, full_name), order_files(*), quotes(*), invoices(*)')
+      .eq('id', orderId)
+      .single()
+    if (error || !order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    return NextResponse.json(order)
+  }
+
+  // Customer: fetch only their own order (RLS enforced)
   const { data: order, error } = await supabase
     .from('orders')
     .select('*, profiles(email, full_name), order_files(*), quotes(*), invoices(*)')

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -11,13 +11,14 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { order_id, quote_id, line_items: bodyItems, tax_rate, due_date, notes, payment_instructions } = body
 
+  const service = createServiceClient()
   let line_items = bodyItems ?? []
   let subtotal = 0
   let rate = parseFloat(tax_rate ?? '0') || 0
 
   // Prefill from accepted quote if provided
   if (quote_id && !bodyItems) {
-    const { data: quote } = await supabase.from('quotes').select('*').eq('id', quote_id).single()
+    const { data: quote } = await service.from('quotes').select('*').eq('id', quote_id).single()
     if (quote) {
       line_items = quote.line_items
       subtotal = quote.subtotal_cents
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
   const tax = Math.round(subtotal * rate)
   const total = subtotal + tax
 
-  const { data: invoice, error } = await supabase
+  const { data: invoice, error } = await service
     .from('invoices')
     .insert({
       order_id,

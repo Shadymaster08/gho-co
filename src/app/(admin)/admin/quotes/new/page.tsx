@@ -16,7 +16,8 @@ import { PricingCalculator } from '@/components/admin/PricingCalculator'
 function NewQuotePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const orderId = searchParams.get('orderId') ?? ''
+  const quoteId  = searchParams.get('quoteId') ?? ''   // editing existing quote
+  const orderId  = searchParams.get('orderId') ?? ''   // creating new quote
 
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { id: uuidv4(), description: '', quantity: 1, unit_price_cents: 0, total_cents: 0 },
@@ -28,21 +29,58 @@ function NewQuotePage() {
   const [materialCostCents, setMaterialCostCents] = useState(0)
   const [loading, setLoading] = useState(false)
   const [orderInfo, setOrderInfo] = useState<any>(null)
+  const [existingQuote, setExistingQuote] = useState<any>(null)
 
+  // Load existing quote when editing
   useEffect(() => {
-    if (!orderId) return
+    if (!quoteId) return
+    fetch(`/api/quotes/${quoteId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(q => {
+        if (!q) return
+        setExistingQuote(q)
+        setLineItems(q.line_items?.length
+          ? q.line_items
+          : [{ id: uuidv4(), description: '', quantity: 1, unit_price_cents: 0, total_cents: 0 }]
+        )
+        setTaxRate(q.tax_rate ? String(Math.round(q.tax_rate * 100 * 1000) / 1000) : '0')
+        setValidUntil(q.valid_until ? q.valid_until.slice(0, 10) : '')
+        setNotes(q.notes ?? '')
+        setInternalNotes(q.internal_notes ?? '')
+        setMaterialCostCents(q.material_cost_cents ?? 0)
+        // Load order info from the nested order
+        if (q.orders) setOrderInfo(q.orders)
+      })
+  }, [quoteId])
+
+  // Load order info when creating new quote
+  useEffect(() => {
+    if (!orderId || quoteId) return
     fetch(`/api/orders/${orderId}`).then(r => r.json()).then(setOrderInfo)
-  }, [orderId])
+  }, [orderId, quoteId])
 
   function applyCalcResult(result: { materialCostCents: number; suggestedPriceCents: number; description: string }) {
     setMaterialCostCents(result.materialCostCents)
-    setLineItems([{
-      id: uuidv4(),
-      description: result.description,
-      quantity: 1,
-      unit_price_cents: result.suggestedPriceCents,
-      total_cents: result.suggestedPriceCents,
-    }])
+
+    const currentTotal = lineItems.reduce((s, i) => s + i.total_cents, 0)
+    const hasRealItems = lineItems.some(i => i.unit_price_cents > 0)
+
+    if (hasRealItems && currentTotal > 0) {
+      // Scale existing line items proportionally to hit the target price
+      const ratio = result.suggestedPriceCents / currentTotal
+      setLineItems(items => items.map(item => {
+        const newUnitPrice = Math.round(item.unit_price_cents * ratio)
+        return { ...item, unit_price_cents: newUnitPrice, total_cents: Math.round(item.quantity * newUnitPrice) }
+      }))
+    } else {
+      setLineItems([{
+        id: uuidv4(),
+        description: result.description,
+        quantity: 1,
+        unit_price_cents: result.suggestedPriceCents,
+        total_cents: result.suggestedPriceCents,
+      }])
+    }
   }
 
   function updateItem(id: string, field: keyof LineItem, rawValue: string | number) {
@@ -69,60 +107,74 @@ function NewQuotePage() {
   const tax = Math.round(subtotal * rate)
   const total = subtotal + tax
 
+  const resolvedOrderId = orderId || existingQuote?.order_id
+
   async function handleSave(send: boolean) {
-    if (!orderId) { toast.error('No order selected'); return }
+    if (!resolvedOrderId) { toast.error('No order selected'); return }
     setLoading(true)
 
-    const res = await fetch('/api/quotes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        order_id: orderId,
-        line_items: lineItems,
-        tax_rate: rate,
-        valid_until: validUntil || null,
-        notes: notes || null,
-        internal_notes: internalNotes || null,
-        material_cost_cents: materialCostCents,
-      }),
-    })
-
-    if (!res.ok) {
-      toast.error('Failed to create quote.')
-      setLoading(false)
-      return
+    const payload = {
+      order_id: resolvedOrderId,
+      line_items: lineItems,
+      tax_rate: rate,
+      valid_until: validUntil || null,
+      notes: notes || null,
+      internal_notes: internalNotes || null,
+      material_cost_cents: materialCostCents,
     }
 
-    const quote = await res.json()
+    let savedQuoteId: string
+
+    if (quoteId) {
+      // Update existing quote
+      const res = await fetch(`/api/quotes/${quoteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { toast.error('Failed to update quote.'); setLoading(false); return }
+      savedQuoteId = quoteId
+    } else {
+      // Create new quote
+      const res = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { toast.error('Failed to create quote.'); setLoading(false); return }
+      const quote = await res.json()
+      savedQuoteId = quote.id
+    }
 
     if (send) {
-      const sendRes = await fetch(`/api/quotes/${quote.id}/send`, { method: 'POST' })
-      if (!sendRes.ok) {
-        toast.error('Quote saved but email failed to send.')
-      } else {
-        toast.success('Quote sent to customer!')
-      }
+      const sendRes = await fetch(`/api/quotes/${savedQuoteId}/send`, { method: 'POST' })
+      if (!sendRes.ok) toast.error('Quote saved but email failed to send.')
+      else toast.success('Quote sent to customer!')
     } else {
-      toast.success('Quote saved as draft.')
+      toast.success(quoteId ? 'Quote updated.' : 'Quote saved as draft.')
     }
 
-    router.push(`/admin/quotes/${quote.id}`)
+    router.push(`/admin/quotes/${savedQuoteId}`)
   }
+
+  const productType = orderInfo?.product_type ?? null
 
   return (
     <div className="p-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Create Quote</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {quoteId ? `Edit ${existingQuote?.quote_number ?? 'Quote'}` : 'Create Quote'}
+        </h1>
         {orderInfo && (
           <p className="mt-1 text-sm text-gray-500">
-            For order <strong>{orderInfo.order_number}</strong> &middot; {orderInfo.profiles?.full_name ?? orderInfo.profiles?.email}
+            For order <strong>{orderInfo.order_number}</strong> &middot; {orderInfo.profiles?.full_name ?? orderInfo.profiles?.email ?? orderInfo.profiles?.full_name}
           </p>
         )}
       </div>
 
       <div className="flex flex-col gap-6 max-w-3xl">
         <PricingCalculator
-          productType={orderInfo?.product_type ?? null}
+          productType={productType}
           onApply={applyCalcResult}
         />
 
@@ -134,7 +186,7 @@ function NewQuotePage() {
 
         <Card header={<span className="font-semibold text-gray-900">Line items</span>}>
           <div className="flex flex-col gap-3">
-            {lineItems.map((item, idx) => (
+            {lineItems.map((item) => (
               <div key={item.id} className="grid grid-cols-12 gap-2 items-start">
                 <div className="col-span-5">
                   <input
@@ -181,12 +233,19 @@ function NewQuotePage() {
             <div className="flex items-center gap-2">
               <span>Tax rate:</span>
               <input
-                type="number" min={0} max={100} step={0.1}
+                type="number" min={0} max={100} step={0.001}
                 value={taxRate}
                 onChange={e => setTaxRate(e.target.value)}
-                className="w-20 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-24 rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <span>%</span>
+              <button
+                type="button"
+                onClick={() => setTaxRate('14.975')}
+                className="rounded border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-100"
+              >
+                QC (14.975%)
+              </button>
               <span className="text-gray-500">{formatCurrency(tax)}</span>
             </div>
             <p className="text-base font-bold">Total: {formatCurrency(total)}</p>
@@ -222,8 +281,12 @@ function NewQuotePage() {
         </Card>
 
         <div className="flex gap-3">
-          <Button onClick={() => handleSave(false)} variant="secondary" loading={loading}>Save as draft</Button>
-          <Button onClick={() => handleSave(true)} loading={loading}>Save &amp; send to customer</Button>
+          <Button onClick={() => handleSave(false)} variant="secondary" loading={loading}>
+            {quoteId ? 'Save changes' : 'Save as draft'}
+          </Button>
+          <Button onClick={() => handleSave(true)} loading={loading}>
+            Save &amp; send to customer
+          </Button>
         </div>
       </div>
     </div>
