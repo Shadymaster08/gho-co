@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/Button'
 import { productTypeLabel } from '@/lib/utils'
 import { redirect } from 'next/navigation'
 
-export default async function OrderConfirmationPage({ params }: { params: { orderId: string } }) {
+export default async function OrderConfirmationPage({ params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -13,7 +14,7 @@ export default async function OrderConfirmationPage({ params }: { params: { orde
   const { data: order } = await supabase
     .from('orders')
     .select('order_number, product_type, created_at')
-    .eq('id', params.orderId)
+    .eq('id', orderId)
     .eq('customer_id', user.id)
     .single()
 

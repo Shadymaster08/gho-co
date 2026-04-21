@@ -4,7 +4,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
-export default async function CustomerInvoicePage({ params }: { params: { invoiceId: string } }) {
+export default async function CustomerInvoicePage({ params }: { params: Promise<{ invoiceId: string }> }) {
+  const { invoiceId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -12,7 +13,7 @@ export default async function CustomerInvoicePage({ params }: { params: { invoic
   const { data: invoice } = await supabase
     .from('invoices')
     .select('*, orders!inner(customer_id)')
-    .eq('id', params.invoiceId)
+    .eq('id', invoiceId)
     .single()
 
   if (!invoice || (invoice as any).orders?.customer_id !== user.id) notFound()

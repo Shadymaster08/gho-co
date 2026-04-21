@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -10,21 +10,23 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import type { Quote } from '@/types'
 
-export default function CustomerQuotePage({ params }: { params: { quoteId: string } }) {
+export default function CustomerQuotePage() {
   const router = useRouter()
+  const { quoteId } = useParams<{ quoteId: string }>()
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
 
   useEffect(() => {
+    if (!quoteId) return
     const supabase = createClient()
-    supabase.from('quotes').select('*').eq('id', params.quoteId).single()
+    supabase.from('quotes').select('*').eq('id', quoteId).single()
       .then(({ data }) => { setQuote(data); setLoading(false) })
-  }, [params.quoteId])
+  }, [quoteId])
 
   async function respond(action: 'accepted' | 'declined') {
     setActing(true)
-    const res = await fetch(`/api/quotes/${params.quoteId}`, {
+    const res = await fetch(`/api/quotes/${quoteId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: action }),

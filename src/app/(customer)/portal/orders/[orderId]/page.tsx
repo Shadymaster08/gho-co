@@ -7,7 +7,8 @@ import { formatDate, formatCurrency, productTypeLabel } from '@/lib/utils'
 import Link from 'next/link'
 import { FileText, Receipt } from 'lucide-react'
 
-export default async function PortalOrderDetailPage({ params }: { params: { orderId: string } }) {
+export default async function PortalOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
@@ -15,7 +16,7 @@ export default async function PortalOrderDetailPage({ params }: { params: { orde
   const { data: order } = await supabase
     .from('orders')
     .select('*, order_files(*), quotes(*), invoices(*)')
-    .eq('id', params.orderId)
+    .eq('id', orderId)
     .eq('customer_id', user.id)
     .single()
 
