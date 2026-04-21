@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useParams } from 'next/navigation'
+import { DeleteButton } from '@/components/admin/DeleteButton'
 
 export default function AdminInvoiceDetailPage() {
   const { invoiceId } = useParams<{ invoiceId: string }>()
@@ -111,6 +112,13 @@ export default function AdminInvoiceDetailPage() {
         {invoice.status === 'sent' && (
           <Button onClick={markPaid} loading={acting} variant="secondary">Mark as paid</Button>
         )}
+        <DeleteButton
+          apiPath={`/api/invoices/${invoiceId}`}
+          redirectTo="/admin/invoices"
+          label="Delete invoice"
+          confirmMessage="Delete this invoice? This cannot be undone."
+          variant="button"
+        />
       </div>
     </div>
   )
