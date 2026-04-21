@@ -176,6 +176,7 @@ function NewQuotePage() {
         <PricingCalculator
           productType={productType}
           onApply={applyCalcResult}
+          orderConfig={orderInfo?.configuration}
         />
 
         {materialCostCents > 0 && (

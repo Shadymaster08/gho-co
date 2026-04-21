@@ -103,9 +103,10 @@ interface CalcResult {
 interface PricingCalculatorProps {
   productType: 'shirt' | '3d_print' | 'diy' | 'lighting' | null
   onApply?: (result: CalcResult) => void
+  orderConfig?: any
 }
 
-export function PricingCalculator({ productType, onApply }: PricingCalculatorProps) {
+export function PricingCalculator({ productType, onApply, orderConfig }: PricingCalculatorProps) {
   const [open, setOpen] = useState(false)
   const prices = useLivePrices()
 
@@ -122,7 +123,7 @@ export function PricingCalculator({ productType, onApply }: PricingCalculatorPro
 
       {open && (
         <div className="border-t border-indigo-100 px-5 pb-5 pt-4">
-          {productType === 'shirt' && <ShirtCalculator onApply={onApply} prices={prices} />}
+          {productType === 'shirt' && <ShirtCalculator onApply={onApply} prices={prices} orderConfig={orderConfig} />}
           {productType === '3d_print' && <PrintCalculator onApply={onApply} prices={prices} />}
           {(productType === 'diy' || productType === 'lighting' || !productType) && <CustomCalculator onApply={onApply} />}
         </div>
@@ -137,14 +138,58 @@ const LABOR_RATE = 50        // $50/hr — calibrated to hit $20-22/shirt on a p
 const SHIRTS_PER_HOUR = 10   // 1 hr per 10 shirts
 const OVERHEAD_RATE = 0.15   // 15% overhead contingency
 
-function ShirtCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => void; prices: CalcPrices }) {
-  const [garment, setGarment] = useState('t-shirt-standard')
-  const [quantity, setQuantity] = useState(10)
-  const [dtfWidth, setDtfWidth] = useState(12)
-  const [dtfHeight, setDtfHeight] = useState(12)
-  const [addBack, setAddBack] = useState(false)
-  const [dtfBackWidth, setDtfBackWidth] = useState(12)
-  const [dtfBackHeight, setDtfBackHeight] = useState(12)
+// Maps order shirt_style values → calculator garment keys
+const STYLE_TO_GARMENT: Record<string, string> = {
+  tshirt:     't-shirt-standard',
+  longsleeve: 'longsleeve',
+  crewneck:   'crewneck',
+  hoodie:     'hoodie',
+  ziphoodie:  'hoodie',
+  polo:       'polo',
+  'tank-top': 'tank-top',
+}
+
+function deriveFromConfig(cfg: any) {
+  const styleGroups: any[] = cfg?.style_groups ?? []
+
+  // Total quantity across all style groups
+  const totalQty = styleGroups.reduce((sum, sg) =>
+    sg.color_groups?.reduce((s: number, cg: any) =>
+      cg.sizes?.reduce((q: number, sz: any) => q + (sz.quantity ?? 0), s) ?? s, sum) ?? sum, 0)
+
+  // Dominant style = the one with the most shirts
+  let dominantStyle = styleGroups[0]?.shirt_style ?? 'tshirt'
+  let maxQty = 0
+  for (const sg of styleGroups) {
+    const qty = sg.color_groups?.reduce((s: number, cg: any) =>
+      cg.sizes?.reduce((q: number, sz: any) => q + (sz.quantity ?? 0), s) ?? s, 0) ?? 0
+    if (qty > maxQty) { maxQty = qty; dominantStyle = sg.shirt_style }
+  }
+
+  return {
+    garment:      STYLE_TO_GARMENT[dominantStyle] ?? 't-shirt-standard',
+    quantity:     totalQty > 0 ? totalQty : 10,
+    dtfWidth:     cfg?.dtf_front_width  ?? 12,
+    dtfHeight:    cfg?.dtf_front_height ?? 12,
+    addBack:      !!(cfg?.dtf_back_width && cfg?.dtf_back_height),
+    dtfBackWidth:  cfg?.dtf_back_width  ?? 12,
+    dtfBackHeight: cfg?.dtf_back_height ?? 12,
+    styleGroups,
+    dominantStyle,
+    multiStyle: styleGroups.length > 1,
+  }
+}
+
+function ShirtCalculator({ onApply, prices, orderConfig }: { onApply?: (r: CalcResult) => void; prices: CalcPrices; orderConfig?: any }) {
+  const init = deriveFromConfig(orderConfig)
+
+  const [garment, setGarment] = useState(init.garment)
+  const [quantity, setQuantity] = useState(init.quantity)
+  const [dtfWidth, setDtfWidth] = useState(init.dtfWidth)
+  const [dtfHeight, setDtfHeight] = useState(init.dtfHeight)
+  const [addBack, setAddBack] = useState(init.addBack)
+  const [dtfBackWidth, setDtfBackWidth] = useState(init.dtfBackWidth)
+  const [dtfBackHeight, setDtfBackHeight] = useState(init.dtfBackHeight)
   const [avgSize, setAvgSize] = useState<keyof typeof SHIRT_SIZE_UPCHARGE>('L')
 
   // 1. Material costs (use live prices)
@@ -178,6 +223,14 @@ function ShirtCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => voi
 
   return (
     <div className="flex flex-col gap-4">
+      {init.multiStyle && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+          <strong>Multi-style order</strong> — showing dominant style ({init.dominantStyle}, {init.styleGroups.find((sg: any) => sg.shirt_style === init.dominantStyle) ? (() => {
+            const sg = init.styleGroups.find((sg: any) => sg.shirt_style === init.dominantStyle)
+            return sg?.color_groups?.reduce((s: number, cg: any) => cg.sizes?.reduce((q: number, sz: any) => q + (sz.quantity ?? 0), s) ?? s, 0) ?? 0
+          })() : 0} units). Adjust garment + quantity per style to price each group individually, or use Apply to scale all line items proportionally.
+        </div>
+      )}
       <SupplierLinks
         links={[
           { label: 'Fabrik.ca (blank shirts)', href: 'https://fabrik.ca/' },
