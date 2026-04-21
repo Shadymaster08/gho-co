@@ -26,7 +26,7 @@ function NewInvoicePage() {
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [paymentInstructions, setPaymentInstructions] = useState(
-    'E-transfer to orders@ghoandco.com — include your order number in the message.'
+    'Virement interac / E-transfer : ghoetco@gmail.com\nVeuillez inclure votre numéro de commande dans le message.\n\nPlease include your order number in the message.'
   )
 
   useEffect(() => {
