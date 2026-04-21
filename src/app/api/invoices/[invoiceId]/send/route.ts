@@ -22,9 +22,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ inv
   const customer = (invoice as any).orders?.profiles
 
   const { data: emailData, error: emailError } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+    from: `Gho&Co <${process.env.RESEND_FROM_EMAIL!}>`,
+    replyTo: process.env.ADMIN_NOTIFY_EMAIL!,
     to: [customer.email],
-    subject: `Invoice ${invoice.invoice_number} from Gho&Co`,
+    subject: `Your invoice from Gho&Co — ${invoice.invoice_number}`,
     react: InvoiceSent({
       customer_name: customer.full_name ?? customer.email,
       invoice_number: invoice.invoice_number,
