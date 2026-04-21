@@ -2,7 +2,7 @@
 
 import { getColorHex } from '@/lib/supplier/fabrik-catalog'
 import { normalizeShirtConfig } from '@/lib/pricing'
-import { useState, useId, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { RotateCcw, Move } from 'lucide-react'
 
 export interface ShirtMockupProps {
@@ -17,134 +17,24 @@ export interface ShirtMockupProps {
   className?: string
 }
 
-const PX_PER_IN = 10
+// Template images are 307 × 420 px. Print-area center in template pixels.
+// PX_PER_INCH converts DTF inches → template pixel units for artwork sizing.
+const TEMPLATE_W = 307
+const TEMPLATE_H = 420
+const PX_PER_INCH = 10
 
-// ─── Garment shapes ─────────────────────────────────────────────────────────
-// All use viewBox "0 0 300 360". Cubic beziers throughout for natural curves.
-// Crewneck, hoodie, ziphoodie all have full-length tapered sleeves.
-// shoulder seams are stored separately for the seam-line overlay.
-
-type ShapeConfig = {
-  body: string
-  collar: string
-  seamR: string   // right shoulder seam path (matches body curve)
-  seamL: string   // left shoulder seam path
-  artCenterY: number
+const TEMPLATE_META: Record<string, { frontCenterY: number; backCenterY: number }> = {
+  tshirt:     { frontCenterY: 170, backCenterY: 160 },
+  longsleeve: { frontCenterY: 170, backCenterY: 160 },
+  crewneck:   { frontCenterY: 185, backCenterY: 168 },
+  hoodie:     { frontCenterY: 200, backCenterY: 168 },
+  ziphoodie:  { frontCenterY: 200, backCenterY: 168 },
 }
 
-const SHAPES: Record<string, ShapeConfig> = {
-  tshirt: {
-    body: `M 118,38
-      C 130,22 170,22 182,38
-      C 200,44 220,52 230,58
-      C 250,64 268,72 282,82
-      L 282,120
-      C 268,128 250,132 238,134
-      L 238,338 L 62,338 L 62,134
-      C 50,132 32,128 18,120
-      L 18,82
-      C 32,72 50,64 70,58
-      C 80,52 100,44 118,38 Z`,
-    collar:
-      'M 118,38 C 130,22 170,22 182,38 C 178,64 164,72 150,74 C 136,72 122,64 118,38 Z',
-    seamR: 'M 182,38 C 200,44 220,52 230,58',
-    seamL: 'M 118,38 C 100,44 80,52 70,58',
-    artCenterY: 200,
-  },
-
-  longsleeve: {
-    body: `M 118,38
-      C 130,22 170,22 182,38
-      C 200,44 220,52 230,58
-      C 250,64 266,72 278,84
-      L 286,308 L 256,314 L 238,134
-      L 238,338 L 62,338 L 62,134
-      L 44,314 L 14,308 L 22,84
-      C 34,72 50,64 70,58
-      C 80,52 100,44 118,38 Z`,
-    collar:
-      'M 118,38 C 130,22 170,22 182,38 C 178,64 164,72 150,74 C 136,72 122,64 118,38 Z',
-    seamR: 'M 182,38 C 200,44 220,52 230,58',
-    seamL: 'M 118,38 C 100,44 80,52 70,58',
-    artCenterY: 200,
-  },
-
-  crewneck: {
-    // Wider, lower crew collar; thick sweatshirt body; long tapered sleeves
-    body: `M 108,52
-      C 122,30 178,30 192,52
-      C 210,58 226,66 236,72
-      C 254,78 270,88 280,98
-      L 288,308 L 258,314 L 238,152
-      L 238,338 L 62,338 L 62,152
-      L 42,314 L 12,308 L 20,98
-      C 30,88 46,78 64,72
-      C 74,66 90,58 108,52 Z`,
-    collar:
-      'M 108,52 C 122,30 178,30 192,52 C 188,84 164,92 150,94 C 136,92 112,84 108,52 Z',
-    seamR: 'M 192,52 C 210,58 226,66 236,72',
-    seamL: 'M 108,52 C 90,58 74,66 64,72',
-    artCenterY: 215,
-  },
-
-  hoodie: {
-    // Hood silhouette rises from shoulders; long tapered sleeves; kangaroo pocket rendered separately
-    body: `M 112,64
-      C 86,38 66,20 62,10
-      C 95,2 150,2 205,2
-      C 234,12 214,38 188,64
-      C 206,70 224,78 234,86
-      C 252,92 270,102 280,112
-      L 288,318 L 258,324 L 238,154
-      L 238,338 L 62,338 L 62,154
-      L 42,324 L 12,318 L 20,112
-      C 30,102 48,92 66,86
-      C 76,78 94,70 112,64 Z`,
-    collar:
-      'M 112,64 C 128,50 172,50 188,64 C 184,94 164,100 150,102 C 136,100 116,94 112,64 Z',
-    seamR: 'M 188,64 C 206,70 224,78 234,86',
-    seamL: 'M 112,64 C 94,70 76,78 66,86',
-    artCenterY: 215,
-  },
-
-  ziphoodie: {
-    // Same silhouette as hoodie; V-split collar for zipper
-    body: `M 112,64
-      C 86,38 66,20 62,10
-      C 95,2 150,2 205,2
-      C 234,12 214,38 188,64
-      C 206,70 224,78 234,86
-      C 252,92 270,102 280,112
-      L 288,318 L 258,324 L 238,154
-      L 238,338 L 62,338 L 62,154
-      L 42,324 L 12,318 L 20,112
-      C 30,102 48,92 66,86
-      C 76,78 94,70 112,64 Z`,
-    collar:
-      // Narrow split at top for the zipper
-      'M 112,64 C 130,50 148,48 150,48 C 152,48 170,50 188,64 C 184,94 152,100 150,100 C 148,100 116,94 112,64 Z',
-    seamR: 'M 188,64 C 206,70 224,78 234,86',
-    seamL: 'M 112,64 C 94,70 76,78 66,86',
-    artCenterY: 215,
-  },
+function isLight(hex: string) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  return ((n >> 16) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000 > 128
 }
-
-// ─── Colour helpers ──────────────────────────────────────────────────────────
-
-function isLight(hex: string): boolean {
-  const n = parseInt(hex.slice(1), 16)
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
-  return (r * 299 + g * 587 + b * 114) / 1000 > 128
-}
-
-function adjustBrightness(hex: string, factor: number): string {
-  const n = parseInt(hex.slice(1), 16)
-  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
-  const a = (v: number) => Math.min(255, Math.max(0, Math.round(v * factor)))
-  return `rgb(${a(r)},${a(g)},${a(b)})`
-}
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export function ShirtMockup({
   shirtStyle = 'tshirt',
@@ -157,7 +47,6 @@ export function ShirtMockup({
   dtfBackHeight,
   className = '',
 }: ShirtMockupProps) {
-  const uid = useId().replace(/:/g, '')
   const svgRef = useRef<SVGSVGElement>(null)
 
   const [side, setSide] = useState<'front' | 'back'>('front')
@@ -219,8 +108,8 @@ export function ShirtMockup({
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shape = SHAPES[shirtStyle] ?? SHAPES.tshirt
   const hex = getColorHex(color) ?? '#d0d0d0'
+  const meta = TEMPLATE_META[shirtStyle] ?? TEMPLATE_META.tshirt
   const light = isLight(hex)
 
   const isFront = side === 'front'
@@ -231,17 +120,15 @@ export function ShirtMockup({
   const offset = isFront ? frontOffset : backOffset
   const isOffsetZero = offset.x === 0 && offset.y === 0
 
-  const svgArtW = artW * PX_PER_IN
-  const svgArtH = artH * PX_PER_IN
-  const artX = 150 - svgArtW / 2 + offset.x
-  const artY = shape.artCenterY - svgArtH / 2 + offset.y
+  const artPxW = artW * PX_PER_INCH
+  const artPxH = artH * PX_PER_INCH
+  const centerY = isFront ? meta.frontCenterY : meta.backCenterY
+  const artX = TEMPLATE_W / 2 - artPxW / 2 + offset.x
+  const artY = centerY - artPxH / 2 + offset.y
 
-  // Derived colours
-  const collarFill  = adjustBrightness(hex, light ? 0.80 : 1.32)
-  const seamColor   = adjustBrightness(hex, light ? 0.86 : 1.20)
-  const outlineColor = light ? '#b0b0b0' : adjustBrightness(hex, 0.50)
-
-  const isHoodie = shirtStyle === 'hoodie' || shirtStyle === 'ziphoodie'
+  const templateSrc = `/mockup-templates/${shirtStyle}-${side}.png`
+  const borderColor = light ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)'
+  const placeholderFill = light ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)'
 
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
@@ -274,119 +161,94 @@ export function ShirtMockup({
         )}
       </div>
 
-      <svg
-        ref={svgRef}
-        viewBox="0 0 300 360"
-        xmlns="http://www.w3.org/2000/svg"
-        className="w-full max-w-[260px] select-none"
-        style={{ filter: 'drop-shadow(0 6px 18px rgba(0,0,0,0.22))' }}
+      {/* Mockup container — stacked layers via CSS blend modes */}
+      <div
+        className="relative w-full max-w-[260px] select-none overflow-hidden rounded-sm"
+        style={{ isolation: 'isolate' }}
       >
-        <defs>
-          <clipPath id={`sc-${uid}`}>
-            <path d={shape.body} />
-          </clipPath>
+        {/* Layer 1: Photo template (white/light-gray shirt with natural shading) */}
+        <img
+          src={templateSrc}
+          alt={`${shirtStyle} ${side}`}
+          className="block w-full"
+          draggable={false}
+        />
 
-          {/* Studio-light radial: soft highlight upper-left, shadow edges */}
-          <radialGradient id={`rl-${uid}`} cx="38%" cy="28%" r="68%" gradientUnits="objectBoundingBox">
-            <stop offset="0%"   stopColor="#fff" stopOpacity="0.07" />
-            <stop offset="55%"  stopColor="#000" stopOpacity="0"    />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.11" />
-          </radialGradient>
+        {/* Layer 2: Shirt color — multiply blend colors the white template
+            white × color = color; gray shadows × color = darker color */}
+        <div
+          style={{
+            position: 'absolute', inset: 0,
+            backgroundColor: hex,
+            mixBlendMode: 'multiply',
+          }}
+        />
 
-          {/* Side-edge darkening */}
-          <linearGradient id={`se-${uid}`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#000" stopOpacity="0.08" />
-            <stop offset="16%"  stopColor="#000" stopOpacity="0"    />
-            <stop offset="84%"  stopColor="#000" stopOpacity="0"    />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.08" />
-          </linearGradient>
+        {/* Layer 3: Artwork overlay — SVG keeps coordinate math in template-px space */}
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${TEMPLATE_W} ${TEMPLATE_H}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            pointerEvents: 'none',
+          }}
+        >
+          {artUrl ? (
+            <>
+              <image
+                href={artUrl}
+                x={artX} y={artY}
+                width={artPxW} height={artPxH}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ cursor: 'grab', pointerEvents: 'all' }}
+                onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
+                onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
+              />
+              <rect
+                x={artX} y={artY} width={artPxW} height={artPxH}
+                fill="none" rx="1"
+                stroke={borderColor}
+                strokeWidth="0.8" strokeDasharray="4 3"
+              />
+            </>
+          ) : (
+            <g>
+              <rect
+                x={artX} y={artY} width={artPxW} height={artPxH}
+                fill="none" rx="2"
+                stroke={borderColor}
+                strokeWidth="1" strokeDasharray="5 3"
+              />
+              <text
+                x={artX + artPxW / 2} y={artY + artPxH / 2}
+                textAnchor="middle" dominantBaseline="middle"
+                fill={placeholderFill}
+                fontSize="9" fontFamily="system-ui, sans-serif"
+              >
+                {artW}″ × {artH}″
+              </text>
+            </g>
+          )}
+        </svg>
 
-          {/* Bottom-hem fade */}
-          <linearGradient id={`bf-${uid}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="72%"  stopColor="#000" stopOpacity="0"    />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.06" />
-          </linearGradient>
-        </defs>
-
-        {/* ① Shirt body fill */}
-        <path d={shape.body} fill={hex} />
-
-        {/* ② Artwork — draggable, not clipped (shading drapes over it) */}
-        {artUrl ? (
-          <image
-            href={artUrl}
-            x={artX} y={artY}
-            width={svgArtW} height={svgArtH}
-            preserveAspectRatio="xMidYMid meet"
-            style={{ cursor: 'grab' }}
-            onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
-            onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
-          />
-        ) : (
-          // Placeholder: dashed rect + dimensions
-          <g>
-            <rect
-              x={artX} y={artY} width={svgArtW} height={svgArtH}
-              fill="none" rx="2"
-              stroke={light ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.22)'}
-              strokeWidth="1" strokeDasharray="5 3"
-            />
-            <text
-              x={150 + offset.x} y={shape.artCenterY + offset.y}
-              textAnchor="middle" dominantBaseline="middle"
-              fill={light ? 'rgba(0,0,0,0.26)' : 'rgba(255,255,255,0.36)'}
-              fontSize="9" fontFamily="system-ui, sans-serif"
-            >
-              {artW}″ × {artH}″
-            </text>
-          </g>
-        )}
-
-        {/* Subtle artwork boundary (always visible for drag reference) */}
-        {artUrl && (
-          <rect
-            x={artX} y={artY} width={svgArtW} height={svgArtH}
-            fill="none" rx="1"
-            stroke={light ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.14)'}
-            strokeWidth="0.6" strokeDasharray="4 3"
-            style={{ pointerEvents: 'none' }}
-          />
-        )}
-
-        {/* ③ Fabric shading — clipped to shirt, rendered on top of artwork */}
-        <g clipPath={`url(#sc-${uid})`}>
-          <path d={shape.body} fill={`url(#rl-${uid})`} />
-          <path d={shape.body} fill={`url(#se-${uid})`} />
-          <path d={shape.body} fill={`url(#bf-${uid})`} />
-        </g>
-
-        {/* ④ Shoulder seam lines */}
-        <path d={shape.seamR} fill="none" stroke={seamColor} strokeWidth="0.7" />
-        <path d={shape.seamL} fill="none" stroke={seamColor} strokeWidth="0.7" />
-
-        {/* ⑤ Collar */}
-        <path d={shape.collar} fill={collarFill} />
-
-        {/* ⑥ Hoodie/ziphoodie — kangaroo pocket */}
-        {isHoodie && (
-          <rect
-            x={104} y={252} width={92} height={56} rx={10}
-            fill={adjustBrightness(hex, light ? 0.90 : 1.15)}
-            stroke={seamColor} strokeWidth="0.7"
-          />
-        )}
-
-        {/* ⑦ Ziphoodie — zipper line */}
-        {shirtStyle === 'ziphoodie' && (
-          <line
-            x1="150" y1="100" x2="150" y2="338"
-            stroke={seamColor} strokeWidth="1.2"
-          />
-        )}
-
-        {/* ⑧ Outline */}
-        <path d={shape.body} fill="none" stroke={outlineColor} strokeWidth="0.8" />
-      </svg>
+        {/* Layer 4: Template again — multiply at 22% adds fabric shadow/fold depth
+            over the artwork without fully obscuring it */}
+        <img
+          src={templateSrc}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          style={{
+            position: 'absolute', inset: 0,
+            width: '100%', height: '100%',
+            mixBlendMode: 'multiply',
+            opacity: 0.22,
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
 
       {/* Caption */}
       <div className="flex flex-col items-center gap-0.5">
