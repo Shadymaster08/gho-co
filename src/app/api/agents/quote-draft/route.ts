@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     } else {
       lineItems = items.map(item => ({
         id: crypto.randomUUID(),
-        description: `${item.description} — blank (Fabrik.ca) + ${dtfDesc} + labor + overhead`,
+        description: item.description,
         quantity: item.quantity,
         unit_price_cents: item.unitPriceCents,
         total_cents: item.quantity * item.unitPriceCents,

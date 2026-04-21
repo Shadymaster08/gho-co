@@ -24,9 +24,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
   const orderNumber = (quote as any).orders?.order_number
 
   const { data: emailData, error: emailError } = await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL!,
+    from: `Gho&Co <${process.env.RESEND_FROM_EMAIL!}>`,
+    replyTo: process.env.ADMIN_NOTIFY_EMAIL!,
     to: [customer.email],
-    subject: `Quote ${quote.quote_number} for your order ${orderNumber}`,
+    subject: `Your quote from Gho&Co — ${quote.quote_number}`,
     react: QuoteSent({
       customer_name: customer.full_name ?? customer.email,
       order_number: orderNumber,

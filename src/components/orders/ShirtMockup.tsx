@@ -17,8 +17,8 @@ export interface ShirtMockupProps {
   className?: string
 }
 
-// Template images are 307 × 420 px. Print-area center in template pixels.
-// PX_PER_INCH converts DTF inches → template pixel units for artwork sizing.
+// Template images are 307 × 450 px.
+// PX_PER_INCH: DTF inches → template pixel units for artwork sizing.
 const TEMPLATE_W = 307
 const TEMPLATE_H = 450
 const PX_PER_INCH = 10
@@ -47,7 +47,7 @@ export function ShirtMockup({
   dtfBackHeight,
   className = '',
 }: ShirtMockupProps) {
-  const svgRef = useRef<SVGSVGElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const [side, setSide] = useState<'front' | 'back'>('front')
   const [frontOffset, setFrontOffset] = useState({ x: 0, y: 0 })
@@ -57,37 +57,36 @@ export function ShirtMockup({
   const sideRef = useRef<'front' | 'back'>('front')
   const frontOffRef = useRef({ x: 0, y: 0 })
   const backOffRef = useRef({ x: 0, y: 0 })
-  const dragAnchor = useRef({ svgX: 0, svgY: 0, offX: 0, offY: 0 })
+  const dragAnchor = useRef({ tmplX: 0, tmplY: 0, offX: 0, offY: 0 })
 
   useEffect(() => { sideRef.current = side }, [side])
   useEffect(() => { frontOffRef.current = frontOffset }, [frontOffset])
   useEffect(() => { backOffRef.current = backOffset }, [backOffset])
 
-  function toSVGCoords(clientX: number, clientY: number) {
-    const svg = svgRef.current
-    if (!svg) return { x: 0, y: 0 }
-    const pt = svg.createSVGPoint()
-    pt.x = clientX; pt.y = clientY
-    const ctm = svg.getScreenCTM()
-    if (!ctm) return { x: 0, y: 0 }
-    const r = pt.matrixTransform(ctm.inverse())
-    return { x: r.x, y: r.y }
+  // Convert screen px → template coordinate space (0–307, 0–450)
+  function toTemplateCoords(clientX: number, clientY: number) {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return { x: 0, y: 0 }
+    return {
+      x: ((clientX - rect.left) / rect.width) * TEMPLATE_W,
+      y: ((clientY - rect.top) / rect.height) * TEMPLATE_H,
+    }
   }
 
   function startDrag(clientX: number, clientY: number) {
     draggingRef.current = true
-    const { x, y } = toSVGCoords(clientX, clientY)
+    const { x, y } = toTemplateCoords(clientX, clientY)
     const off = sideRef.current === 'front' ? frontOffRef.current : backOffRef.current
-    dragAnchor.current = { svgX: x, svgY: y, offX: off.x, offY: off.y }
+    dragAnchor.current = { tmplX: x, tmplY: y, offX: off.x, offY: off.y }
   }
 
   useEffect(() => {
     function move(clientX: number, clientY: number) {
       if (!draggingRef.current) return
-      const { x, y } = toSVGCoords(clientX, clientY)
+      const { x, y } = toTemplateCoords(clientX, clientY)
       const newOff = {
-        x: dragAnchor.current.offX + (x - dragAnchor.current.svgX),
-        y: dragAnchor.current.offY + (y - dragAnchor.current.svgY),
+        x: dragAnchor.current.offX + (x - dragAnchor.current.tmplX),
+        y: dragAnchor.current.offY + (y - dragAnchor.current.tmplY),
       }
       if (sideRef.current === 'front') setFrontOffset(newOff)
       else setBackOffset(newOff)
@@ -126,8 +125,14 @@ export function ShirtMockup({
   const artX = TEMPLATE_W / 2 - artPxW / 2 + offset.x
   const artY = centerY - artPxH / 2 + offset.y
 
+  // Convert template-px positions to CSS percentages for absolute positioning
+  const artLeftPct = (artX / TEMPLATE_W) * 100
+  const artTopPct  = (artY / TEMPLATE_H) * 100
+  const artWPct    = (artPxW / TEMPLATE_W) * 100
+  const artHPct    = (artPxH / TEMPLATE_H) * 100
+
   const templateSrc = `/mockup-templates/${shirtStyle}-${side}.png`
-  const borderColor = light ? 'rgba(0,0,0,0.18)' : 'rgba(255,255,255,0.35)'
+  const borderColor = light ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.40)'
   const placeholderFill = light ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)'
 
   return (
@@ -161,12 +166,13 @@ export function ShirtMockup({
         )}
       </div>
 
-      {/* Mockup container — stacked layers via CSS blend modes */}
+      {/* Mockup container — CSS blend-mode stack */}
       <div
+        ref={containerRef}
         className="relative w-full max-w-[260px] select-none overflow-hidden rounded-sm"
         style={{ isolation: 'isolate' }}
       >
-        {/* Layer 1: Photo template (white/light-gray shirt with natural shading) */}
+        {/* Layer 1: Photo template */}
         <img
           src={templateSrc}
           alt={`${shirtStyle} ${side}`}
@@ -174,8 +180,8 @@ export function ShirtMockup({
           draggable={false}
         />
 
-        {/* Layer 2: Shirt color — multiply blend colors the white template
-            white × color = color; gray shadows × color = darker color */}
+        {/* Layer 2: Shirt color via multiply blend
+            white template × shirt color = shirt color */}
         <div
           style={{
             position: 'absolute', inset: 0,
@@ -184,57 +190,47 @@ export function ShirtMockup({
           }}
         />
 
-        {/* Layer 3: Artwork overlay — SVG keeps coordinate math in template-px space */}
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${TEMPLATE_W} ${TEMPLATE_H}`}
-          preserveAspectRatio="xMidYMid meet"
-          style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%',
-            pointerEvents: 'none',
-          }}
-        >
-          {artUrl ? (
-            <>
-              <image
-                href={artUrl}
-                x={artX} y={artY}
-                width={artPxW} height={artPxH}
-                preserveAspectRatio="xMidYMid meet"
-                style={{ cursor: 'grab', pointerEvents: 'all' }}
-                onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
-                onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
-              />
-              <rect
-                x={artX} y={artY} width={artPxW} height={artPxH}
-                fill="none" rx="1"
-                stroke={borderColor}
-                strokeWidth="0.8" strokeDasharray="4 3"
-              />
-            </>
-          ) : (
-            <g>
-              <rect
-                x={artX} y={artY} width={artPxW} height={artPxH}
-                fill="none" rx="2"
-                stroke={borderColor}
-                strokeWidth="1" strokeDasharray="5 3"
-              />
-              <text
-                x={artX + artPxW / 2} y={artY + artPxH / 2}
-                textAnchor="middle" dominantBaseline="middle"
-                fill={placeholderFill}
-                fontSize="9" fontFamily="system-ui, sans-serif"
-              >
-                {artW}″ × {artH}″
-              </text>
-            </g>
-          )}
-        </svg>
+        {/* Layer 3: Artwork — plain HTML img for reliable cross-origin rendering */}
+        {artUrl && (
+          <img
+            src={artUrl}
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: `${artLeftPct}%`,
+              top: `${artTopPct}%`,
+              width: `${artWPct}%`,
+              height: `${artHPct}%`,
+              objectFit: 'contain',
+              cursor: 'grab',
+            }}
+            onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
+            onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
+          />
+        )}
 
-        {/* Layer 4: Template again — multiply at 22% adds fabric shadow/fold depth
-            over the artwork without fully obscuring it */}
+        {/* Layer 3 (no artwork): dashed placeholder box */}
+        {!artUrl && (
+          <svg
+            viewBox={`0 0 ${TEMPLATE_W} ${TEMPLATE_H}`}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+          >
+            <rect
+              x={artX} y={artY} width={artPxW} height={artPxH}
+              fill="none" rx="2"
+              stroke={borderColor} strokeWidth="1" strokeDasharray="5 3"
+            />
+            <text
+              x={artX + artPxW / 2} y={artY + artPxH / 2}
+              textAnchor="middle" dominantBaseline="middle"
+              fill={placeholderFill} fontSize="9" fontFamily="system-ui, sans-serif"
+            >
+              {artW}″ × {artH}″
+            </text>
+          </svg>
+        )}
+
+        {/* Layer 4: Template re-drawn at 22% multiply — adds fabric depth over artwork */}
         <img
           src={templateSrc}
           alt=""

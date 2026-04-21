@@ -215,7 +215,7 @@ export function calcShirtOrder(config: any, prices?: LivePrices): PricingResult 
     return {
       costCents: totalCostCents,
       priceCents: applyMargin(totalCostCents),
-      description: `Custom apparel ×${totalQty}: ${styleDescParts.join(' + ')} — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
+      description: `Custom apparel ×${totalQty}: ${styleDescParts.join(' + ')} — blanks${dtfDesc} + labor`,
       notes,
     }
   }
@@ -247,7 +247,7 @@ export function calcShirtOrder(config: any, prices?: LivePrices): PricingResult 
   return {
     costCents,
     priceCents: applyMargin(costCents),
-    description: `Custom ${STYLE_NAMES[style] ?? style} ×${qty} (${colorSummary}) — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
+    description: `Custom ${STYLE_NAMES[style] ?? style} ×${qty} (${colorSummary}) — blanks${dtfDesc} + labor`,
     notes,
   }
 }
