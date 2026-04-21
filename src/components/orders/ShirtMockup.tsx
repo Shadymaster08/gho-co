@@ -2,8 +2,8 @@
 
 import { getColorHex } from '@/lib/supplier/fabrik-catalog'
 import { normalizeShirtConfig } from '@/lib/pricing'
-import { useState, useRef, useEffect } from 'react'
-import { RotateCcw, Move } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { RotateCcw, Move, Save } from 'lucide-react'
 
 export interface ShirtMockupProps {
   shirtStyle?: string
@@ -14,11 +14,13 @@ export interface ShirtMockupProps {
   dtfFrontHeight?: number | null
   dtfBackWidth?: number | null
   dtfBackHeight?: number | null
+  initialFrontOffset?: { x: number; y: number }
+  initialBackOffset?: { x: number; y: number }
+  onSave?: (frontOffset: { x: number; y: number }, backOffset: { x: number; y: number }) => Promise<void>
   className?: string
 }
 
 // Template images are 307 × 450 px.
-// PX_PER_INCH: DTF inches → template pixel units for artwork sizing.
 const TEMPLATE_W = 307
 const TEMPLATE_H = 450
 const PX_PER_INCH = 10
@@ -45,43 +47,47 @@ export function ShirtMockup({
   dtfFrontHeight = 12,
   dtfBackWidth,
   dtfBackHeight,
+  initialFrontOffset = { x: 0, y: 0 },
+  initialBackOffset  = { x: 0, y: 0 },
+  onSave,
   className = '',
 }: ShirtMockupProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [side, setSide] = useState<'front' | 'back'>('front')
-  const [frontOffset, setFrontOffset] = useState({ x: 0, y: 0 })
-  const [backOffset, setBackOffset] = useState({ x: 0, y: 0 })
+  const [frontOffset, setFrontOffset] = useState(initialFrontOffset)
+  const [backOffset,  setBackOffset]  = useState(initialBackOffset)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved]   = useState(false)
 
-  const draggingRef = useRef(false)
-  const sideRef = useRef<'front' | 'back'>('front')
-  const frontOffRef = useRef({ x: 0, y: 0 })
-  const backOffRef = useRef({ x: 0, y: 0 })
-  const dragAnchor = useRef({ tmplX: 0, tmplY: 0, offX: 0, offY: 0 })
+  const draggingRef  = useRef(false)
+  const sideRef      = useRef<'front' | 'back'>('front')
+  const frontOffRef  = useRef(initialFrontOffset)
+  const backOffRef   = useRef(initialBackOffset)
+  const dragAnchor   = useRef({ tmplX: 0, tmplY: 0, offX: 0, offY: 0 })
 
   useEffect(() => { sideRef.current = side }, [side])
   useEffect(() => { frontOffRef.current = frontOffset }, [frontOffset])
-  useEffect(() => { backOffRef.current = backOffset }, [backOffset])
+  useEffect(() => { backOffRef.current  = backOffset  }, [backOffset])
 
-  // Convert screen px → template coordinate space (0–307, 0–450)
-  function toTemplateCoords(clientX: number, clientY: number) {
+  const toTemplateCoords = useCallback((clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return { x: 0, y: 0 }
     return {
-      x: ((clientX - rect.left) / rect.width) * TEMPLATE_W,
-      y: ((clientY - rect.top) / rect.height) * TEMPLATE_H,
+      x: ((clientX - rect.left)  / rect.width)  * TEMPLATE_W,
+      y: ((clientY - rect.top)   / rect.height) * TEMPLATE_H,
     }
-  }
+  }, [])
 
-  function startDrag(clientX: number, clientY: number) {
+  const startDrag = useCallback((clientX: number, clientY: number) => {
     draggingRef.current = true
     const { x, y } = toTemplateCoords(clientX, clientY)
     const off = sideRef.current === 'front' ? frontOffRef.current : backOffRef.current
     dragAnchor.current = { tmplX: x, tmplY: y, offX: off.x, offY: off.y }
-  }
+  }, [toTemplateCoords])
 
   useEffect(() => {
-    function move(clientX: number, clientY: number) {
+    const move = (clientX: number, clientY: number) => {
       if (!draggingRef.current) return
       const { x, y } = toTemplateCoords(clientX, clientY)
       const newOff = {
@@ -105,57 +111,67 @@ export function ShirtMockup({
       window.removeEventListener('touchmove', tm)
       window.removeEventListener('touchend', te)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [toTemplateCoords])
 
-  const hex = getColorHex(color) ?? '#d0d0d0'
-  const meta = TEMPLATE_META[shirtStyle] ?? TEMPLATE_META.tshirt
+  const hex   = getColorHex(color) ?? '#d0d0d0'
+  const meta  = TEMPLATE_META[shirtStyle] ?? TEMPLATE_META.tshirt
   const light = isLight(hex)
 
-  const isFront = side === 'front'
-  const hasBothSides = !!(frontArtworkUrl && backArtworkUrl)
-  const artUrl = isFront ? frontArtworkUrl : backArtworkUrl
-  const artW = Number((isFront ? dtfFrontWidth : dtfBackWidth) ?? 12)
-  const artH = Number((isFront ? dtfFrontHeight : dtfBackHeight) ?? 12)
-  const offset = isFront ? frontOffset : backOffset
-  const isOffsetZero = offset.x === 0 && offset.y === 0
+  const isFront  = side === 'front'
+  const artUrl   = isFront ? frontArtworkUrl : backArtworkUrl
+  const artW     = Number((isFront ? dtfFrontWidth  : dtfBackWidth)  ?? 12)
+  const artH     = Number((isFront ? dtfFrontHeight : dtfBackHeight) ?? 12)
+  const offset   = isFront ? frontOffset : backOffset
 
-  const artPxW = artW * PX_PER_INCH
-  const artPxH = artH * PX_PER_INCH
-  const centerY = isFront ? meta.frontCenterY : meta.backCenterY
-  const artX = TEMPLATE_W / 2 - artPxW / 2 + offset.x
-  const artY = centerY - artPxH / 2 + offset.y
+  const frontChanged = frontOffset.x !== initialFrontOffset.x || frontOffset.y !== initialFrontOffset.y
+  const backChanged  = backOffset.x  !== initialBackOffset.x  || backOffset.y  !== initialBackOffset.y
+  const hasChanged   = frontChanged || backChanged
 
-  // Convert template-px positions to CSS percentages for absolute positioning
+  const artPxW    = artW * PX_PER_INCH
+  const artPxH    = artH * PX_PER_INCH
+  const centerY   = isFront ? meta.frontCenterY : meta.backCenterY
+  const artX      = TEMPLATE_W / 2 - artPxW / 2 + offset.x
+  const artY      = centerY - artPxH / 2 + offset.y
   const artLeftPct = (artX / TEMPLATE_W) * 100
   const artTopPct  = (artY / TEMPLATE_H) * 100
   const artWPct    = (artPxW / TEMPLATE_W) * 100
   const artHPct    = (artPxH / TEMPLATE_H) * 100
 
-  const templateSrc = `/mockup-templates/${shirtStyle}-${side}.png`
-  const borderColor = light ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.40)'
+  const templateSrc   = `/mockup-templates/${shirtStyle}-${side}.png`
+  const borderColor   = light ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.40)'
   const placeholderFill = light ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)'
+
+  async function handleSave() {
+    if (!onSave) return
+    setSaving(true)
+    await onSave(frontOffset, backOffset)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
-      {/* Controls */}
-      <div className="flex items-center gap-2">
-        {hasBothSides && (
-          <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
-            {(['front', 'back'] as const).map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSide(s)}
-                className={`px-3 py-1.5 font-medium capitalize transition-colors ${
-                  side === s ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-        {!isOffsetZero && (
+      {/* Controls row */}
+      <div className="flex items-center gap-2 flex-wrap justify-center">
+        {/* Front / Back toggle — always visible */}
+        <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
+          {(['front', 'back'] as const).map(s => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSide(s)}
+              className={`px-3 py-1.5 font-medium capitalize transition-colors ${
+                side === s ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {/* Reset offset for current side */}
+        {(offset.x !== 0 || offset.y !== 0) && (
           <button
             type="button"
             onClick={() => isFront ? setFrontOffset({ x: 0, y: 0 }) : setBackOffset({ x: 0, y: 0 })}
@@ -164,9 +180,22 @@ export function ShirtMockup({
             <RotateCcw className="h-3 w-3" /> Reset
           </button>
         )}
+
+        {/* Save button (only when onSave prop provided and position changed) */}
+        {onSave && hasChanged && (
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+          >
+            <Save className="h-3 w-3" />
+            {saved ? 'Saved!' : saving ? 'Saving…' : 'Save position'}
+          </button>
+        )}
       </div>
 
-      {/* Mockup container — CSS blend-mode stack */}
+      {/* Mockup stack */}
       <div
         ref={containerRef}
         className="relative w-full max-w-[260px] select-none overflow-hidden rounded-sm"
@@ -180,8 +209,7 @@ export function ShirtMockup({
           draggable={false}
         />
 
-        {/* Layer 2: Shirt color via multiply blend
-            white template × shirt color = shirt color */}
+        {/* Layer 2: Shirt color via multiply */}
         <div
           style={{
             position: 'absolute', inset: 0,
@@ -190,26 +218,27 @@ export function ShirtMockup({
           }}
         />
 
-        {/* Layer 3: Artwork — plain HTML img for reliable cross-origin rendering */}
+        {/* Layer 3a: Artwork image */}
         {artUrl && (
           <img
             src={artUrl}
             draggable={false}
             style={{
               position: 'absolute',
-              left: `${artLeftPct}%`,
-              top: `${artTopPct}%`,
-              width: `${artWPct}%`,
+              left:   `${artLeftPct}%`,
+              top:    `${artTopPct}%`,
+              width:  `${artWPct}%`,
               height: `${artHPct}%`,
               objectFit: 'contain',
               cursor: 'grab',
+              userSelect: 'none',
             }}
             onMouseDown={e => { e.preventDefault(); startDrag(e.clientX, e.clientY) }}
             onTouchStart={e => { e.preventDefault(); startDrag(e.touches[0].clientX, e.touches[0].clientY) }}
           />
         )}
 
-        {/* Layer 3 (no artwork): dashed placeholder box */}
+        {/* Layer 3b: Placeholder when no artwork */}
         {!artUrl && (
           <svg
             viewBox={`0 0 ${TEMPLATE_W} ${TEMPLATE_H}`}
@@ -230,7 +259,7 @@ export function ShirtMockup({
           </svg>
         )}
 
-        {/* Layer 4: Template re-drawn at 22% multiply — adds fabric depth over artwork */}
+        {/* Layer 4: Fabric depth */}
         <img
           src={templateSrc}
           alt=""
@@ -249,7 +278,7 @@ export function ShirtMockup({
       {/* Caption */}
       <div className="flex flex-col items-center gap-0.5">
         <p className="text-xs text-gray-400 text-center">
-          {isFront ? 'Front' : 'Back'} · {color} · {artUrl ? `${artW}″ × ${artH}″ DTF` : 'no artwork uploaded'}
+          {isFront ? 'Front' : 'Back'} · {color} · {artUrl ? `${artW}″ × ${artH}″ DTF` : 'no artwork for this side'}
         </p>
         {artUrl && (
           <p className="flex items-center gap-1 text-[11px] text-gray-300">
@@ -265,6 +294,8 @@ export function ShirtMockup({
 
 interface ShirtMockupCardProps {
   config: any
+  orderFiles?: Array<{ file_type: string; storage_path: string }>
+  orderId?: string
   className?: string
 }
 
@@ -273,7 +304,13 @@ const SHIRT_STYLE_LABELS: Record<string, string> = {
   hoodie: 'Hoodie', ziphoodie: 'Zip Hoodie',
 }
 
-export function ShirtMockupCard({ config, className = '' }: ShirtMockupCardProps) {
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+
+function filePublicUrl(storagePath: string) {
+  return `${SUPABASE_URL}/storage/v1/object/public/order-files/${storagePath}`
+}
+
+export function ShirtMockupCard({ config, orderFiles = [], orderId, className = '' }: ShirtMockupCardProps) {
   const normalized = normalizeShirtConfig(config)
   const colorGroups: any[] = normalized.color_groups ?? []
   const colors = colorGroups.map((g: any) => g.color).filter(Boolean)
@@ -290,7 +327,32 @@ export function ShirtMockupCard({ config, className = '' }: ShirtMockupCardProps
     }
   }
 
+  // Resolve artwork URLs: prefer config URLs, fall back to order_files records
+  const frontFile = orderFiles.find(f => f.file_type === 'front_artwork')
+  const backFile  = orderFiles.find(f => f.file_type === 'back_artwork')
+  const frontArtworkUrl = config?.front_file_url ?? (frontFile ? filePublicUrl(frontFile.storage_path) : null)
+  const backArtworkUrl  = config?.back_file_url  ?? (backFile  ? filePublicUrl(backFile.storage_path)  : null)
+
+  // Persisted artwork offsets
+  const savedOffsets = config?.artwork_offsets ?? {}
+  const initialFront = savedOffsets.front ?? { x: 0, y: 0 }
+  const initialBack  = savedOffsets.back  ?? { x: 0, y: 0 }
+
   const [selectedColor, setSelectedColor] = useState(colors[0] ?? 'White')
+
+  async function handleSave(frontOffset: { x: number; y: number }, backOffset: { x: number; y: number }) {
+    if (!orderId) return
+    await fetch(`/api/orders/${orderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        configuration: {
+          ...config,
+          artwork_offsets: { front: frontOffset, back: backOffset },
+        },
+      }),
+    })
+  }
 
   return (
     <div className={className}>
@@ -316,12 +378,15 @@ export function ShirtMockupCard({ config, className = '' }: ShirtMockupCardProps
       <ShirtMockup
         shirtStyle={shirtStyle}
         color={selectedColor}
-        frontArtworkUrl={config?.front_file_url}
-        backArtworkUrl={config?.back_file_url}
+        frontArtworkUrl={frontArtworkUrl}
+        backArtworkUrl={backArtworkUrl}
         dtfFrontWidth={config?.dtf_front_width}
         dtfFrontHeight={config?.dtf_front_height}
         dtfBackWidth={config?.dtf_back_width}
         dtfBackHeight={config?.dtf_back_height}
+        initialFrontOffset={initialFront}
+        initialBackOffset={initialBack}
+        onSave={orderId ? handleSave : undefined}
       />
     </div>
   )

@@ -278,7 +278,7 @@ export default function AdminOrderDetailPage() {
         <div className="flex flex-col gap-6">
           {order.product_type === 'shirt' && (
             <Card header={<span className="font-semibold text-gray-900">Mockup preview</span>}>
-              <ShirtMockupCard config={config} />
+              <ShirtMockupCard config={config} orderFiles={order.order_files ?? []} orderId={orderId} />
             </Card>
           )}
 
