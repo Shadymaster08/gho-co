@@ -6,9 +6,19 @@ import PortfolioGallery from './PortfolioGallery'
 
 const GRAIN_SVG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`
 
-export const metadata = {
-  title: 'Portfolio — Gho&Co',
-  description: 'Our work — custom shirts, 3D prints, DIY objects, and lighting.',
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Portfolio',
+  description:
+    'Browse our work — custom printed shirts, 3D prints, DIY builds, and custom lighting. See the quality before you order.',
+  keywords: ['custom shirt examples', 'DTF print portfolio', '3D print examples Canada', 'portfolio impression personnalisée'],
+  alternates: { canonical: 'https://www.ghoandco.com/portfolio' },
+  openGraph: {
+    title: 'Portfolio — Gho&Co',
+    description: 'Browse our custom shirts, 3D prints, DIY builds, and lighting projects.',
+    url: 'https://www.ghoandco.com/portfolio',
+  },
 }
 
 export default async function PortfolioPage() {
