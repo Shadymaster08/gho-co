@@ -11,11 +11,11 @@ export const SHIRTS_PER_HOUR = 10
 export const OVERHEAD_RATE = 0.15   // 15% contingency
 
 export const SHIRT_STYLE_COSTS: Record<string, number> = {
-  tshirt:    3.10,
+  tshirt:     3.10,
   longsleeve: 6.50,
-  crewneck:  14.00,
-  hoodie:    18.00,
-  ziphoodie: 18.00,
+  crewneck:   14.00,
+  hoodie:     18.00,
+  ziphoodie:  18.00,
 }
 
 export const SHIRT_SIZE_UPCHARGE: Record<string, number> = {
@@ -31,6 +31,42 @@ export const FILAMENT_COSTS_PER_KG: Record<string, number> = {
   'TPU':       32,
 }
 
+// ── Live prices from price_configs table ─────────────────────────────────────
+
+export interface LivePrices {
+  shirtStyles: Record<string, number>   // style → cost in dollars
+  dtfPerSqIn: number                    // dollars per sq inch
+  filamentPerKg: Record<string, number> // material name → cost per kg in dollars
+}
+
+const FILAMENT_ID_TO_NAME: Record<string, string> = {
+  filament_pla_basic: 'PLA Basic',
+  filament_pla_matte: 'PLA Matte',
+  filament_pla_silk:  'PLA Silk',
+  filament_petg:      'PETG',
+  filament_tpu:       'TPU',
+}
+
+export function buildLivePrices(configs: any[]): LivePrices {
+  const prices: LivePrices = {
+    shirtStyles:   { ...SHIRT_STYLE_COSTS },
+    dtfPerSqIn:    0.02,
+    filamentPerKg: { ...FILAMENT_COSTS_PER_KG },
+  }
+  for (const c of configs) {
+    if (c.id.startsWith('shirt_')) {
+      prices.shirtStyles[c.id.replace('shirt_', '')] = c.value_cents / 100
+    } else if (c.id === 'dtf_per_sqin') {
+      prices.dtfPerSqIn = c.value_cents / 100
+    } else if (FILAMENT_ID_TO_NAME[c.id]) {
+      prices.filamentPerKg[FILAMENT_ID_TO_NAME[c.id]] = c.value_cents / 100
+    }
+  }
+  return prices
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 export function applyMargin(costCents: number): number {
   return Math.ceil(costCents * MULTIPLIER)
 }
@@ -42,9 +78,8 @@ export interface PricingResult {
   notes: string
 }
 
-// ── Shirt order ──────────────────────────────────────────────────────────────
+// ── Shirt order ───────────────────────────────────────────────────────────────
 
-// Handles both the new color_groups format and legacy shirt_color + sizes format.
 export function normalizeShirtConfig(config: any): { color_groups: ColorGroup[] } {
   if (Array.isArray(config.color_groups)) return { color_groups: config.color_groups }
   return {
@@ -60,11 +95,14 @@ const STYLE_NAMES: Record<string, string> = {
   hoodie: 'Hoodie', ziphoodie: 'Zip Hoodie',
 }
 
-export function calcShirtOrder(config: any): PricingResult {
-  const dtfFront = (config.dtf_front_width ?? 0) * (config.dtf_front_height ?? 0) * 0.02
-  const dtfBack  = (config.dtf_back_width  ?? 0) * (config.dtf_back_height  ?? 0)  * 0.02
-  const hasDtf = dtfFront > 0 || dtfBack > 0
-  const dtfDesc = hasDtf
+export function calcShirtOrder(config: any, prices?: LivePrices): PricingResult {
+  const styleCosts = prices?.shirtStyles ?? SHIRT_STYLE_COSTS
+  const dtfRate    = prices?.dtfPerSqIn  ?? 0.02
+
+  const dtfFront = (config.dtf_front_width ?? 0) * (config.dtf_front_height ?? 0) * dtfRate
+  const dtfBack  = (config.dtf_back_width  ?? 0) * (config.dtf_back_height  ?? 0) * dtfRate
+  const hasDtf   = dtfFront > 0 || dtfBack > 0
+  const dtfDesc  = hasDtf
     ? ` + DTF (${dtfFront > 0 ? `front ${config.dtf_front_width}"×${config.dtf_front_height}"` : ''}${dtfBack > 0 ? ` back ${config.dtf_back_width}"×${config.dtf_back_height}"` : ''})`
     : ' + DTF transfer (size not specified)'
   const notes = !hasDtf ? 'DTF print dimensions were not provided — update DTF costs before sending.' : ''
@@ -82,7 +120,7 @@ export function calcShirtOrder(config: any): PricingResult {
       const qty = allSizes.reduce((s: number, sz: any) => s + (sz.quantity ?? 0), 0)
       if (qty === 0) continue
 
-      const baseUnitCost = SHIRT_STYLE_COSTS[style] ?? 3.10
+      const baseUnitCost = styleCosts[style] ?? 3.10
       const totalUpcharge = allSizes.reduce((sum: number, sz: any) => sum + (SHIRT_SIZE_UPCHARGE[sz.size] ?? 0) * sz.quantity, 0)
       const avgUpcharge = totalUpcharge / qty
       const unitMaterial = baseUnitCost + avgUpcharge + dtfFront + dtfBack
@@ -120,13 +158,12 @@ export function calcShirtOrder(config: any): PricingResult {
   }
 
   const style = config.shirt_style ?? 'tshirt'
-  const baseUnitCost = SHIRT_STYLE_COSTS[style] ?? 3.10
+  const baseUnitCost = styleCosts[style] ?? 3.10
   const totalUpcharge = allSizes.reduce((sum, sz) => sum + (SHIRT_SIZE_UPCHARGE[sz.size] ?? 0) * sz.quantity, 0)
   const avgUpcharge = totalUpcharge / qty
   const unitMaterial = baseUnitCost + avgUpcharge + dtfFront + dtfBack
   const subtotal = unitMaterial * qty + (qty / SHIRTS_PER_HOUR) * LABOR_RATE
   const costCents = Math.round((subtotal + subtotal * OVERHEAD_RATE) * 100)
-  const priceCents = applyMargin(costCents)
 
   const colorSummary = color_groups.length === 1
     ? color_groups[0].color
@@ -137,34 +174,33 @@ export function calcShirtOrder(config: any): PricingResult {
 
   return {
     costCents,
-    priceCents,
+    priceCents: applyMargin(costCents),
     description: `Custom ${STYLE_NAMES[style] ?? style} ×${qty} (${colorSummary}) — blank (Fabrik.ca)${dtfDesc} + labor + overhead`,
     notes,
   }
 }
 
-// ── 3D print order ───────────────────────────────────────────────────────────
+// ── 3D print order ────────────────────────────────────────────────────────────
 
-export function calcPrintOrder(config: any): PricingResult {
-  const qty      = config.quantity ?? 1
-  const material = config.material ?? 'PLA Basic'
-  const perKg    = FILAMENT_COSTS_PER_KG[material] ?? 29
+export function calcPrintOrder(config: any, prices?: LivePrices): PricingResult {
+  const filamentCosts = prices?.filamentPerKg ?? FILAMENT_COSTS_PER_KG
+  const qty           = config.quantity ?? 1
+  const material      = config.material ?? 'PLA Basic'
+  const perKg         = filamentCosts[material] ?? 29
 
-  // Weight is unknown without slicing the STL — use 100g as a safe default
   const estimatedWeightG = 100
   const filamentCost = (estimatedWeightG / 1000) * perKg * qty
-  const costCents = Math.round(filamentCost * 100)
-  const priceCents = applyMargin(costCents)
+  const costCents    = Math.round(filamentCost * 100)
 
   return {
     costCents,
-    priceCents,
+    priceCents: applyMargin(costCents),
     description: `3D Print ×${qty} — ${material} ~${estimatedWeightG}g/unit`,
     notes: 'Weight estimated at 100g/unit. Slice the STL to get the actual weight and update the quote.',
   }
 }
 
-// ── DIY / Lighting ───────────────────────────────────────────────────────────
+// ── DIY / Lighting ────────────────────────────────────────────────────────────
 
 export function calcConsultationOrder(config: any): PricingResult {
   return {

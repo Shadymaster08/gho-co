@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { formatCurrency } from '@/lib/utils'
 import { Calculator, ExternalLink, Upload, Loader2, TrendingUp, AlertTriangle, CheckCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
@@ -9,8 +9,8 @@ import { Button } from '@/components/ui/Button'
 const MARGIN = 0.35
 const MULTIPLIER = 1 / (1 - MARGIN)
 
-// Fabrik.ca approximate per-unit costs (CAD)
-const SHIRT_BASE_COSTS: Record<string, number> = {
+// Defaults — overridden by live price_configs when loaded
+const DEFAULT_SHIRT_BASE_COSTS: Record<string, number> = {
   't-shirt-standard':   3.10,
   't-shirt-premium':    4.50,
   'longsleeve':         6.50,
@@ -25,8 +25,8 @@ const SHIRT_SIZE_UPCHARGE: Record<string, number> = {
   '2XL': 1.00, '3XL': 2.00,
 }
 
-// Bambu Lab filament $/kg (CAD approximate)
-const FILAMENT_COSTS: Record<string, number> = {
+// Defaults — overridden by live price_configs when loaded
+const DEFAULT_FILAMENT_COSTS: Record<string, number> = {
   'PLA (Bambu)':   29,
   'PLA (Generic)': 18,
   'PETG':          22,
@@ -34,6 +34,56 @@ const FILAMENT_COSTS: Record<string, number> = {
   'TPU':           32,
   'ASA':           26,
   'Resin':         45,
+}
+
+// Maps price_configs DB IDs → calculator keys
+const DB_SHIRT_MAP: Record<string, string> = {
+  shirt_tshirt:     't-shirt-standard',
+  shirt_longsleeve: 'longsleeve',
+  shirt_crewneck:   'crewneck',
+  shirt_hoodie:     'hoodie',
+}
+
+const DB_FILAMENT_MAP: Record<string, string> = {
+  filament_pla_basic: 'PLA (Bambu)',
+  filament_pla_matte: 'PLA (Bambu)',
+  filament_petg:      'PETG',
+  filament_tpu:       'TPU',
+}
+
+interface CalcPrices {
+  shirtCosts: Record<string, number>
+  dtfPerSqIn: number
+  filamentCosts: Record<string, number>
+}
+
+function useLivePrices(): CalcPrices {
+  const [prices, setPrices] = useState<CalcPrices>({
+    shirtCosts:    DEFAULT_SHIRT_BASE_COSTS,
+    dtfPerSqIn:    0.02,
+    filamentCosts: DEFAULT_FILAMENT_COSTS,
+  })
+
+  useEffect(() => {
+    fetch('/api/price-configs')
+      .then(r => r.ok ? r.json() : null)
+      .then((rows: any[] | null) => {
+        if (!rows) return
+        const shirtCosts    = { ...DEFAULT_SHIRT_BASE_COSTS }
+        const filamentCosts = { ...DEFAULT_FILAMENT_COSTS }
+        let dtfPerSqIn      = 0.02
+
+        for (const row of rows) {
+          if (DB_SHIRT_MAP[row.id])    shirtCosts[DB_SHIRT_MAP[row.id]]       = row.value_cents / 100
+          if (DB_FILAMENT_MAP[row.id]) filamentCosts[DB_FILAMENT_MAP[row.id]] = row.value_cents / 100
+          if (row.id === 'dtf_per_sqin') dtfPerSqIn = row.value_cents / 100
+        }
+        setPrices({ shirtCosts, dtfPerSqIn, filamentCosts })
+      })
+      .catch(() => {})
+  }, [])
+
+  return prices
 }
 
 function applyMargin(costCents: number): number {
@@ -58,6 +108,7 @@ interface PricingCalculatorProps {
 
 export function PricingCalculator({ productType, onApply }: PricingCalculatorProps) {
   const [open, setOpen] = useState(false)
+  const prices = useLivePrices()
 
   return (
     <div className="rounded-xl border border-indigo-100 bg-indigo-50">
@@ -72,8 +123,8 @@ export function PricingCalculator({ productType, onApply }: PricingCalculatorPro
 
       {open && (
         <div className="border-t border-indigo-100 px-5 pb-5 pt-4">
-          {productType === 'shirt' && <ShirtCalculator onApply={onApply} />}
-          {productType === '3d_print' && <PrintCalculator onApply={onApply} />}
+          {productType === 'shirt' && <ShirtCalculator onApply={onApply} prices={prices} />}
+          {productType === '3d_print' && <PrintCalculator onApply={onApply} prices={prices} />}
           {(productType === 'diy' || productType === 'lighting' || !productType) && <CustomCalculator onApply={onApply} />}
         </div>
       )}
@@ -87,7 +138,7 @@ const LABOR_RATE = 50        // $50/hr — calibrated to hit $20-22/shirt on a p
 const SHIRTS_PER_HOUR = 10   // 1 hr per 10 shirts
 const OVERHEAD_RATE = 0.15   // 15% overhead contingency
 
-function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
+function ShirtCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => void; prices: CalcPrices }) {
   const [garment, setGarment] = useState('t-shirt-standard')
   const [quantity, setQuantity] = useState(10)
   const [dtfWidth, setDtfWidth] = useState(12)
@@ -97,10 +148,10 @@ function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
   const [dtfBackHeight, setDtfBackHeight] = useState(12)
   const [avgSize, setAvgSize] = useState<keyof typeof SHIRT_SIZE_UPCHARGE>('L')
 
-  // 1. Material costs
-  const shirtUnitCost  = (SHIRT_BASE_COSTS[garment] ?? 3.10) + (SHIRT_SIZE_UPCHARGE[avgSize] ?? 0)
-  const dtfFrontCost   = dtfWidth * dtfHeight * 0.02
-  const dtfBackCost    = addBack ? dtfBackWidth * dtfBackHeight * 0.02 : 0
+  // 1. Material costs (use live prices)
+  const shirtUnitCost  = (prices.shirtCosts[garment] ?? 3.10) + (SHIRT_SIZE_UPCHARGE[avgSize] ?? 0)
+  const dtfFrontCost   = dtfWidth * dtfHeight * prices.dtfPerSqIn
+  const dtfBackCost    = addBack ? dtfBackWidth * dtfBackHeight * prices.dtfPerSqIn : 0
   const unitMaterialCost   = shirtUnitCost + dtfFrontCost + dtfBackCost
   const totalMaterialCost  = unitMaterialCost * quantity
 
@@ -138,7 +189,7 @@ function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <CalcField label="Garment type">
           <select value={garment} onChange={e => setGarment(e.target.value)} className={selectCls}>
-            {Object.entries(SHIRT_BASE_COSTS).map(([k, v]) => (
+            {Object.entries(prices.shirtCosts).map(([k, v]) => (
               <option key={k} value={k}>{k.replace(/-/g, ' ')} — ${v.toFixed(2)}</option>
             ))}
           </select>
@@ -158,12 +209,12 @@ function ShirtCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
       </div>
 
       <div className="rounded-lg bg-white p-3">
-        <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Front DTF transfer (Ninja Transfers @ $0.02/sq in)</p>
+        <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Front DTF transfer (Ninja Transfers @ ${prices.dtfPerSqIn.toFixed(2)}/sq in)</p>
         <div className="flex items-center gap-2">
           <input type="number" min={1} value={dtfWidth} onChange={e => setDtfWidth(+e.target.value || 1)} className={`${inputCls} w-20`} />
           <span className="text-sm text-gray-500">×</span>
           <input type="number" min={1} value={dtfHeight} onChange={e => setDtfHeight(+e.target.value || 1)} className={`${inputCls} w-20`} />
-          <span className="text-sm text-gray-500">inches = ${dtfFrontCost.toFixed(2)}/unit</span>
+          <span className="text-sm text-gray-500">inches = ${dtfFrontCost.toFixed(2)}/unit @ ${prices.dtfPerSqIn.toFixed(2)}/sq in</span>
         </div>
 
         <label className="mt-3 flex items-center gap-2 text-sm text-gray-600">
@@ -212,7 +263,7 @@ interface SlicerData {
   notes: string | null
 }
 
-function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
+function PrintCalculator({ onApply, prices }: { onApply?: (r: CalcResult) => void; prices: CalcPrices }) {
   const [material, setMaterial] = useState('PLA (Bambu)')
   const [weightG, setWeightG] = useState(100)
   const [printTimeMin, setPrintTimeMin] = useState(60)
@@ -242,7 +293,7 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
         if (data.filament_weight_g) setWeightG(data.filament_weight_g)
         if (data.print_time_minutes) setPrintTimeMin(data.print_time_minutes)
         if (data.filament_type) {
-          const match = Object.keys(FILAMENT_COSTS).find(k =>
+          const match = Object.keys(prices.filamentCosts).find(k =>
             k.toLowerCase().includes(data.filament_type!.toLowerCase())
           )
           if (match) setMaterial(match)
@@ -254,7 +305,7 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
 
   // Electricity: ~$0.10/kWh, printer ~300W → $0.03/hr
   const electricityCost = (printTimeMin / 60) * 0.03
-  const pricePerKg = FILAMENT_COSTS[material] ?? 25
+  const pricePerKg = prices.filamentCosts[material] ?? 25
   const filamentCost = (weightG / 1000) * pricePerKg
   const totalMaterialCost = (filamentCost + electricityCost + otherCost) * quantity
   const totalMaterialCents = Math.round(totalMaterialCost * 100)
@@ -329,7 +380,7 @@ function PrintCalculator({ onApply }: { onApply?: (r: CalcResult) => void }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <CalcField label="Filament type">
           <select value={material} onChange={e => setMaterial(e.target.value)} className={selectCls}>
-            {Object.entries(FILAMENT_COSTS).map(([m, p]) => (
+            {Object.entries(prices.filamentCosts).map(([m, p]) => (
               <option key={m} value={m}>{m} — ${p}/kg</option>
             ))}
           </select>

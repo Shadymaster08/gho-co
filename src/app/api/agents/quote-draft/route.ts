@@ -4,6 +4,7 @@ import {
   calcShirtOrder,
   calcPrintOrder,
   calcConsultationOrder,
+  buildLivePrices,
 } from '@/lib/pricing'
 
 export async function POST(request: Request) {
@@ -28,12 +29,16 @@ export async function POST(request: Request) {
 
   const config = order.configuration ?? {}
 
+  // Fetch live supplier prices from DB
+  const { data: priceRows } = await supabase.from('price_configs').select('id, value_cents')
+  const prices = buildLivePrices(priceRows ?? [])
+
   // Calculate pricing based on product type
   let result
   if (order.product_type === 'shirt') {
-    result = calcShirtOrder(config)
+    result = calcShirtOrder(config, prices)
   } else if (order.product_type === '3d_print') {
-    result = calcPrintOrder(config)
+    result = calcPrintOrder(config, prices)
   } else {
     result = calcConsultationOrder(config)
   }
