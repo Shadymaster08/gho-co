@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, Trash2, Plus } from 'lucide-react'
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, Trash2, Plus, Download, Receipt } from 'lucide-react'
 import type { Expense, ExpenseSplit, ExpenseCategory, ExpenseStatus } from '@/types'
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
@@ -121,9 +121,14 @@ export default function ExpensesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
           <p className="text-sm text-gray-400">Internal expense tracking — admins only</p>
         </div>
-        <Link href="/admin/expenses/new">
-          <Button><Plus className="h-4 w-4 mr-1.5" />Add expense</Button>
-        </Link>
+        <div className="flex gap-2">
+          <a href="/api/expenses/export" download>
+            <Button variant="secondary"><Download className="h-4 w-4 mr-1.5" />Export</Button>
+          </a>
+          <Link href="/admin/expenses/new">
+            <Button><Plus className="h-4 w-4 mr-1.5" />Add expense</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -286,6 +291,20 @@ export default function ExpensesPage() {
                                     })}
                                   </tbody>
                                 </table>
+                                {(expense as any).receipt_url && (
+                                  <div className="mt-3 border-t border-gray-200 pt-3 flex items-start gap-3">
+                                    <Receipt className="h-4 w-4 text-gray-400 mt-0.5 shrink-0" />
+                                    {(expense as any).receipt_url.match(/\.(png|jpg|jpeg|webp|heic)$/i) ? (
+                                      <a href={(expense as any).receipt_url} target="_blank" rel="noopener noreferrer">
+                                        <img src={(expense as any).receipt_url} alt="Receipt" className="h-28 w-auto rounded-lg border border-gray-200 object-cover hover:opacity-80 transition-opacity" />
+                                      </a>
+                                    ) : (
+                                      <a href={(expense as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline">
+                                        View receipt
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                                 {expense.description && (
                                   <p className="mt-3 text-xs text-gray-500 border-t border-gray-200 pt-2">{expense.description}</p>
                                 )}

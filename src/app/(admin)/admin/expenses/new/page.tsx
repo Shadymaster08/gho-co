@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/Button'
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency } from '@/lib/utils'
+import { Upload, X, Receipt } from 'lucide-react'
 import type { ExpenseCategory } from '@/types'
 
 const CATEGORIES: { value: ExpenseCategory; label: string }[] = [
@@ -49,6 +50,14 @@ function NewExpensePage() {
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
 
+  // Receipt state
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null)
+  const [existingReceiptUrl, setExistingReceiptUrl] = useState<string | null>(null)
+  const [removeReceipt, setRemoveReceipt] = useState(false)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     fetch('/api/admin/customers?role=admin')
       .then(r => r.json())
@@ -59,7 +68,6 @@ function NewExpensePage() {
       })
   }, [])
 
-  // Load existing expense when editing
   useEffect(() => {
     if (!expenseId || loadingData) return
     fetch(`/api/expenses/${expenseId}`)
@@ -72,6 +80,7 @@ function NewExpensePage() {
         setDate(exp.date)
         setDescription(exp.description ?? '')
         setPaidBy(exp.paid_by)
+        if (exp.receipt_url) setExistingReceiptUrl(exp.receipt_url)
         const existingSplits: { admin_id: string; share_cents: number }[] = exp.expense_splits ?? []
         setSplits(prev => prev.map(row => {
           const found = existingSplits.find(s => s.admin_id === row.admin_id)
@@ -81,6 +90,19 @@ function NewExpensePage() {
         }))
       })
   }, [expenseId, loadingData])
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setReceiptFile(file)
+    setRemoveReceipt(false)
+    if (file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file)
+      setReceiptPreview(url)
+    } else {
+      setReceiptPreview(null)
+    }
+  }
 
   const amountCents = Math.round(parseFloat(amountDollars) * 100) || 0
   const splitTotal = splits
@@ -140,6 +162,22 @@ function NewExpensePage() {
       : await fetch('/api/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 
     if (!res.ok) { toast.error('Failed to save expense.'); setLoading(false); return }
+
+    const saved = await res.json()
+    const savedId = expenseId || saved.id
+
+    // Handle receipt upload
+    if (receiptFile && savedId) {
+      setUploadingReceipt(true)
+      const form = new FormData()
+      form.append('file', receiptFile)
+      const uploadRes = await fetch(`/api/expenses/${savedId}/receipt`, { method: 'POST', body: form })
+      if (!uploadRes.ok) toast.error('Expense saved but receipt upload failed.')
+      setUploadingReceipt(false)
+    } else if (removeReceipt && savedId && existingReceiptUrl) {
+      await fetch(`/api/expenses/${savedId}/receipt`, { method: 'DELETE' })
+    }
+
     toast.success(expenseId ? 'Expense updated.' : 'Expense created.')
     router.push('/admin/expenses')
   }
@@ -147,6 +185,7 @@ function NewExpensePage() {
   if (loadingData) return <div className="p-10 text-center text-gray-400">Loading...</div>
 
   const includedCount = splits.filter(s => s.included).length
+  const showExistingReceipt = existingReceiptUrl && !removeReceipt && !receiptFile
 
   return (
     <div className="p-4 sm:p-8 max-w-2xl">
@@ -185,6 +224,71 @@ function NewExpensePage() {
               <Textarea label="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Any extra details..." />
             </div>
           </div>
+        </Card>
+
+        {/* Receipt upload */}
+        <Card header={
+          <div className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-gray-500" />
+            <span className="font-semibold text-gray-900">Receipt</span>
+            <span className="text-xs text-gray-400 font-normal">(optional)</span>
+          </div>
+        }>
+          {showExistingReceipt ? (
+            <div className="flex items-start gap-3">
+              {existingReceiptUrl!.match(/\.(png|jpg|jpeg|webp|heic)$/i) ? (
+                <a href={existingReceiptUrl!} target="_blank" rel="noopener noreferrer">
+                  <img src={existingReceiptUrl!} alt="Receipt" className="h-32 w-auto rounded-lg border border-gray-200 object-cover cursor-pointer hover:opacity-80 transition-opacity" />
+                </a>
+              ) : (
+                <a href={existingReceiptUrl!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-indigo-600 hover:underline">
+                  <Receipt className="h-4 w-4" /> View receipt
+                </a>
+              )}
+              <button
+                onClick={() => setRemoveReceipt(true)}
+                className="text-xs text-red-500 hover:underline flex items-center gap-1"
+              >
+                <X className="h-3 w-3" /> Remove
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/heic,application/pdf"
+                onChange={onFileChange}
+                className="hidden"
+              />
+              {receiptFile ? (
+                <div className="flex items-start gap-3">
+                  {receiptPreview ? (
+                    <img src={receiptPreview} alt="Receipt preview" className="h-32 w-auto rounded-lg border border-gray-200 object-cover" />
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600">
+                      <Receipt className="h-4 w-4" /> {receiptFile.name}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => { setReceiptFile(null); setReceiptPreview(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                    className="text-xs text-red-500 hover:underline flex items-center gap-1"
+                  >
+                    <X className="h-3 w-3" /> Remove
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 px-4 py-5 text-sm text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors w-full justify-center"
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload receipt (PNG, JPG, PDF…)
+                </button>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Paid by */}
@@ -262,8 +366,8 @@ function NewExpensePage() {
         </Card>
 
         <div className="flex gap-3">
-          <Button onClick={handleSave} loading={loading}>
-            {expenseId ? 'Save changes' : 'Create expense'}
+          <Button onClick={handleSave} loading={loading || uploadingReceipt}>
+            {uploadingReceipt ? 'Uploading receipt…' : expenseId ? 'Save changes' : 'Create expense'}
           </Button>
           <Button variant="secondary" onClick={() => router.push('/admin/expenses')}>
             Cancel
