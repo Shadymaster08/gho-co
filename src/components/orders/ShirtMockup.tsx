@@ -218,7 +218,7 @@ export function ShirtMockup({
           <ZoomIn className="h-3 w-3 text-gray-400 shrink-0" />
           <input
             type="range"
-            min={40} max={200} step={1}
+            min={40} max={500} step={1}
             value={Math.round(state.scale * 100)}
             onChange={e => {
               const s = parseInt(e.target.value) / 100
