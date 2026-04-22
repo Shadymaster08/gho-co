@@ -20,21 +20,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ inv
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
   const customer = (invoice as any).orders?.profiles
+  const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${invoiceId}`
+
+  const lineItemsText = (invoice.line_items ?? [])
+    .map((item: any) => `- ${item.description} x${item.quantity}: $${(item.total_cents / 100).toFixed(2)}`)
+    .join('\n')
 
   const { data: emailData, error: emailError } = await resend.emails.send({
     from: `Gho&Co <${process.env.RESEND_FROM_EMAIL!}>`,
     replyTo: process.env.ADMIN_NOTIFY_EMAIL!,
     to: [customer.email],
-    subject: `Your invoice from Gho&Co — ${invoice.invoice_number}`,
+    subject: `Your invoice from Gho&Co - ${invoice.invoice_number}`,
     react: InvoiceSent({
       customer_name: customer.full_name ?? customer.email,
       invoice_number: invoice.invoice_number,
       total_cents: invoice.total_cents,
       due_date: invoice.due_date,
       payment_instructions: invoice.payment_instructions,
-      invoice_url: `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${invoiceId}`,
+      invoice_url: invoiceUrl,
       line_items: invoice.line_items,
     }),
+    text: `Hi ${customer.full_name ?? customer.email},\n\nYour invoice ${invoice.invoice_number} is ready.\n\n${lineItemsText}\n\nTotal: $${(invoice.total_cents / 100).toFixed(2)}${invoice.due_date ? `\nDue: ${invoice.due_date}` : ''}${invoice.payment_instructions ? `\n\nPayment instructions:\n${invoice.payment_instructions}` : ''}\n\nView your invoice:\n${invoiceUrl}\n\nQuestions? Reply to this email.\n\nGho&Co`,
+    headers: {
+      'X-Entity-Ref-ID': invoiceId,
+    },
   })
 
   await supabase.from('email_log').insert({
