@@ -184,3 +184,34 @@ export interface OrderFile {
   mime_type: string | null
   created_at: string
 }
+
+export type ExpenseCategory = 'supplies' | 'membership' | 'tools_equipment' | 'other'
+export type ExpenseStatus = 'open' | 'settled'
+
+export interface ExpenseSplit {
+  id: string
+  expense_id: string
+  admin_id: string
+  share_cents: number
+  is_reimbursed: boolean
+  reimbursed_at: string | null
+  notes: string | null
+  profiles?: Pick<Profile, 'email' | 'full_name'>
+}
+
+export interface Expense {
+  id: string
+  expense_number: string
+  title: string
+  category: ExpenseCategory
+  amount_cents: number
+  date: string
+  description: string | null
+  paid_by: string
+  status: ExpenseStatus
+  created_by: string
+  created_at: string
+  updated_at: string
+  expense_splits?: ExpenseSplit[]
+  profiles?: Pick<Profile, 'email' | 'full_name'>
+}

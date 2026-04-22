@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, ShoppingBag, FileText, Receipt, Truck, Images, TrendingUp, LogOut, Menu, X } from 'lucide-react'
+import { LayoutDashboard, ShoppingBag, FileText, Receipt, Wallet, Truck, Images, TrendingUp, LogOut, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useLocale } from '@/lib/i18n/LocaleContext'
@@ -21,6 +21,7 @@ export function AdminSidebar() {
     { href: '/admin/orders', label: s.orders, icon: ShoppingBag },
     { href: '/admin/quotes', label: s.quotes, icon: FileText },
     { href: '/admin/invoices', label: s.invoices, icon: Receipt },
+    { href: '/admin/expenses', label: 'Expenses', icon: Wallet },
     { href: '/admin/supplier', label: s.supplier, icon: Truck },
     { href: '/admin/portfolio', label: s.portfolio, icon: Images },
     { href: '/admin/trends', label: s.trends ?? 'Trends', icon: TrendingUp },
