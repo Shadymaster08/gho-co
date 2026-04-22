@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
+import { PrintButton } from '@/components/ui/PrintButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 export default async function CustomerInvoicePage({ params }: { params: Promise<{ invoiceId: string }> }) {
@@ -25,7 +26,10 @@ export default async function CustomerInvoicePage({ params }: { params: Promise<
           <h1 className="text-xl font-bold text-gray-900">Invoice {invoice.invoice_number}</h1>
           {invoice.due_date && <p className="text-xs text-gray-400">Due {formatDate(invoice.due_date)}</p>}
         </div>
-        <Badge status={invoice.status} />
+        <div className="flex items-center gap-3">
+          <Badge status={invoice.status} />
+          <PrintButton label="Print / Save PDF" />
+        </div>
       </div>
 
       <Card className="mb-6">

@@ -16,7 +16,7 @@ export function CustomerNav({ profile }: { profile: Profile | null }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#d2d2d7]/60 bg-white/80 backdrop-blur-xl">
+    <header className="print:hidden sticky top-0 z-40 border-b border-[#d2d2d7]/60 bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link href="/" className="text-base font-semibold tracking-tight text-[#1d1d1f]">
           Gho&amp;Co

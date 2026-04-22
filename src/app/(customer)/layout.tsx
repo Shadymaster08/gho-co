@@ -15,7 +15,7 @@ export default async function CustomerLayout({ children }: { children: React.Rea
     <div className="min-h-screen bg-[#f5f5f7]">
       <CustomerNav profile={profile} />
       <main>{children}</main>
-      <footer className="mt-24 border-t border-[#d2d2d7] bg-white py-10 text-center">
+      <footer className="print:hidden mt-24 border-t border-[#d2d2d7] bg-white py-10 text-center">
         <p className="text-sm font-medium text-[#1d1d1f]">Gho&amp;Co</p>
         <p className="mt-1 text-sm text-[#86868b]">
           Custom shirts, 3D prints, DIY projects &amp; lighting
