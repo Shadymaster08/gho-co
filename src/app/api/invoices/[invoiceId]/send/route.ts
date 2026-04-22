@@ -20,6 +20,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ inv
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
 
   const customer = (invoice as any).orders?.profiles
+  const orderNumber = (invoice as any).orders?.order_number
   const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${invoiceId}`
 
   const lineItemsText = (invoice.line_items ?? [])
@@ -34,6 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ inv
     react: InvoiceSent({
       customer_name: customer.full_name ?? customer.email,
       invoice_number: invoice.invoice_number,
+      order_number: orderNumber ?? undefined,
       total_cents: invoice.total_cents,
       due_date: invoice.due_date,
       payment_instructions: invoice.payment_instructions,

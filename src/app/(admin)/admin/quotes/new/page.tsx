@@ -30,6 +30,8 @@ function NewQuotePage() {
   const [loading, setLoading] = useState(false)
   const [orderInfo, setOrderInfo] = useState<any>(null)
   const [existingQuote, setExistingQuote] = useState<any>(null)
+  const [customers, setCustomers] = useState<Array<{ id: string; email: string; full_name: string | null }>>([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
   // Load existing quote when editing
   useEffect(() => {
@@ -53,10 +55,16 @@ function NewQuotePage() {
       })
   }, [quoteId])
 
-  // Load order info when creating new quote
+  // Load order info when creating new quote from an existing order
   useEffect(() => {
     if (!orderId || quoteId) return
     fetch(`/api/orders/${orderId}`).then(r => r.json()).then(setOrderInfo)
+  }, [orderId, quoteId])
+
+  // Load customer list when creating a freeform quote (no orderId)
+  useEffect(() => {
+    if (orderId || quoteId) return
+    fetch('/api/admin/customers').then(r => r.json()).then(setCustomers)
   }, [orderId, quoteId])
 
   function applyCalcResult(result: { materialCostCents: number; suggestedPriceCents: number; description: string }) {
@@ -110,11 +118,25 @@ function NewQuotePage() {
   const resolvedOrderId = orderId || existingQuote?.order_id
 
   async function handleSave(send: boolean) {
-    if (!resolvedOrderId) { toast.error('No order selected'); return }
     setLoading(true)
 
+    let finalOrderId = resolvedOrderId
+
+    // Freeform quote: create a stub order for the selected customer first
+    if (!finalOrderId) {
+      if (!selectedCustomerId) { toast.error('Please select a customer.'); setLoading(false); return }
+      const stubRes = await fetch('/api/admin/stub-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_id: selectedCustomerId }),
+      })
+      if (!stubRes.ok) { toast.error('Failed to create order for customer.'); setLoading(false); return }
+      const stub = await stubRes.json()
+      finalOrderId = stub.order_id
+    }
+
     const payload = {
-      order_id: resolvedOrderId,
+      order_id: finalOrderId,
       line_items: lineItems,
       tax_rate: rate,
       valid_until: validUntil || null,
@@ -173,6 +195,28 @@ function NewQuotePage() {
       </div>
 
       <div className="flex flex-col gap-6 max-w-3xl">
+        {/* Customer picker — shown when no order is linked (freeform custom quote) */}
+        {!resolvedOrderId && !orderId && (
+          <Card header={<span className="font-semibold text-gray-900">Customer</span>}>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Select customer</label>
+              <select
+                value={selectedCustomerId}
+                onChange={e => setSelectedCustomerId(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">— Choose a customer —</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.full_name ? `${c.full_name} (${c.email})` : c.email}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">A custom order will be created automatically for this customer.</p>
+            </div>
+          </Card>
+        )}
+
         <PricingCalculator
           productType={productType}
           onApply={applyCalcResult}

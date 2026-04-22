@@ -3,6 +3,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 interface InvoiceSentProps {
   customer_name: string
   invoice_number: string
+  order_number?: string
   total_cents: number
   due_date: string | null
   payment_instructions: string | null
@@ -10,7 +11,7 @@ interface InvoiceSentProps {
   line_items: Array<{ description: string; quantity: number; total_cents: number }>
 }
 
-export function InvoiceSent({ customer_name, invoice_number, total_cents, due_date, payment_instructions, invoice_url, line_items }: InvoiceSentProps) {
+export function InvoiceSent({ customer_name, invoice_number, order_number, total_cents, due_date, payment_instructions, invoice_url, line_items }: InvoiceSentProps) {
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: 560, margin: '0 auto', color: '#111827' }}>
       <div style={{ backgroundColor: '#4f46e5', padding: '24px', borderRadius: '8px 8px 0 0' }}>
@@ -19,7 +20,7 @@ export function InvoiceSent({ customer_name, invoice_number, total_cents, due_da
 
       <div style={{ padding: '24px', border: '1px solid #e5e7eb', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
         <p>Hi {customer_name},</p>
-        <p>Your invoice <strong>{invoice_number}</strong> is ready.</p>
+        <p>Your invoice <strong>{invoice_number}</strong> is ready{order_number ? <> for order <strong>{order_number}</strong></> : ''}.</p>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', margin: '16px 0' }}>
           <thead>
