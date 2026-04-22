@@ -8,9 +8,11 @@ interface QuoteSentProps {
   valid_until: string | null
   quote_url: string
   line_items: Array<{ description: string; quantity: number; unit_price_cents: number; total_cents: number }>
+  mockup_front_url?: string
+  mockup_back_url?: string
 }
 
-export function QuoteSent({ customer_name, order_number, quote_number, total_cents, valid_until, quote_url, line_items }: QuoteSentProps) {
+export function QuoteSent({ customer_name, order_number, quote_number, total_cents, valid_until, quote_url, line_items, mockup_front_url, mockup_back_url }: QuoteSentProps) {
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: 560, margin: '0 auto', color: '#111827', backgroundColor: '#ffffff' }}>
       {/* Header */}
@@ -49,6 +51,27 @@ export function QuoteSent({ customer_name, order_number, quote_number, total_cen
             </tr>
           </tfoot>
         </table>
+
+        {/* Mockup preview */}
+        {(mockup_front_url || mockup_back_url) && (
+          <div style={{ margin: '24px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Your mockup</p>
+            <div style={{ display: 'inline-flex', gap: 16, justifyContent: 'center' }}>
+              {mockup_front_url && (
+                <div style={{ textAlign: 'center' }}>
+                  <img src={mockup_front_url} alt="Front mockup" width={180} style={{ display: 'block', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>Front</p>
+                </div>
+              )}
+              {mockup_back_url && (
+                <div style={{ textAlign: 'center' }}>
+                  <img src={mockup_back_url} alt="Back mockup" width={180} style={{ display: 'block', borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                  <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>Back</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {valid_until && (
           <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 20px' }}>
