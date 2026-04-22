@@ -42,7 +42,7 @@ export default async function AdminDashboardPage() {
   ]
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="mb-8 text-2xl font-bold text-gray-900">Dashboard</h1>
 
       {/* Stats */}

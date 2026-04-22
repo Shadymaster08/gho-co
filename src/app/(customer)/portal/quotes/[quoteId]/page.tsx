@@ -56,6 +56,7 @@ export default function CustomerQuotePage() {
       </div>
 
       <Card className="mb-6">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-gray-500">
@@ -76,6 +77,7 @@ export default function CustomerQuotePage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         <div className="mt-4 flex flex-col items-end gap-1 text-sm">
           <p className="text-gray-500">Subtotal: {formatCurrency(quote.subtotal_cents)}</p>

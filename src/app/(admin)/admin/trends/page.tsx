@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 
 export default function TrendsPage() {
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 sm:p-8 max-w-5xl">
       <div className="mb-2">
         <h1 className="text-2xl font-bold text-[#1d1d1f]">Trends</h1>
         <p className="mt-1 text-sm text-[#86868b]">

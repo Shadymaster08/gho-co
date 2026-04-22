@@ -80,7 +80,7 @@ export default function AdminQuoteDetailPage() {
   const overallMargin = subtotal > 0 ? (totalProfit / subtotal) * 100 : 0
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-8 max-w-3xl">
       <Link href="/admin/quotes" className="text-sm text-indigo-600 hover:underline">← Quotes</Link>
       <div className="mt-2 mb-6 flex items-start justify-between">
         <div>
@@ -95,6 +95,7 @@ export default function AdminQuoteDetailPage() {
 
       {/* Line items */}
       <Card className="mb-4">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-gray-500">
@@ -115,6 +116,7 @@ export default function AdminQuoteDetailPage() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Pricing summary */}
         <div className="mt-4 border-t pt-4 flex flex-col gap-3">
@@ -177,6 +179,7 @@ export default function AdminQuoteDetailPage() {
             <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700">Internal only</span>
           </div>
         }>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-gray-400 uppercase tracking-wide">
@@ -229,6 +232,7 @@ export default function AdminQuoteDetailPage() {
               </tr>
             </tfoot>
           </table>
+          </div>
         </Card>
       )}
 

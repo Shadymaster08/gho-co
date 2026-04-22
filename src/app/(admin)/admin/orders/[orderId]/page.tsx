@@ -158,7 +158,7 @@ export default function AdminOrderDetailPage() {
   const config = order.configuration ?? {}
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6 flex items-start justify-between">
         <div>
           <Link href="/admin/orders" className="text-sm text-indigo-600 hover:underline">← Orders</Link>

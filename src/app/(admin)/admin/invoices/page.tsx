@@ -18,7 +18,7 @@ export default async function AdminInvoicesPage({ searchParams }: { searchParams
     .order('created_at', { ascending: false })
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
         {searchParams.createFrom && (
@@ -31,7 +31,7 @@ export default async function AdminInvoicesPage({ searchParams }: { searchParams
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50 text-left text-gray-500">
             <tr>

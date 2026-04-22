@@ -18,10 +18,10 @@ export default async function AdminQuotesPage() {
     .order('created_at', { ascending: false })
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Quotes</h1>
 
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50 text-left text-gray-500">
             <tr>

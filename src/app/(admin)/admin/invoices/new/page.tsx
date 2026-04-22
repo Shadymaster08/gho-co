@@ -81,7 +81,7 @@ function NewInvoicePage() {
   const hasTax    = taxCents > 0
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-8 max-w-3xl">
       <Link href="/admin/invoices" className="text-sm text-indigo-600 hover:underline">← Invoices</Link>
       <div className="mt-2 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Create Invoice</h1>

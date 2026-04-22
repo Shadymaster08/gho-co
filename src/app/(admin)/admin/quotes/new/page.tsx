@@ -160,7 +160,7 @@ function NewQuotePage() {
   const productType = orderInfo?.product_type ?? null
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           {quoteId ? `Edit ${existingQuote?.quote_number ?? 'Quote'}` : 'Create Quote'}
@@ -188,8 +188,8 @@ function NewQuotePage() {
         <Card header={<span className="font-semibold text-gray-900">Line items</span>}>
           <div className="flex flex-col gap-3">
             {lineItems.map((item) => (
-              <div key={item.id} className="grid grid-cols-12 gap-2 items-start">
-                <div className="col-span-5">
+              <div key={item.id} className="grid grid-cols-2 gap-2 items-start sm:grid-cols-12 rounded-lg bg-gray-50 p-2 sm:bg-transparent sm:p-0">
+                <div className="col-span-2 sm:col-span-5">
                   <input
                     placeholder="Description"
                     value={item.description}
@@ -197,7 +197,7 @@ function NewQuotePage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <input
                     type="number" min={1} placeholder="Qty"
                     value={item.quantity}
@@ -205,7 +205,7 @@ function NewQuotePage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1 sm:col-span-2">
                   <input
                     type="number" min={0} placeholder="Unit $"
                     value={item.unit_price_cents / 100}
@@ -213,11 +213,11 @@ function NewQuotePage() {
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
-                <div className="col-span-2 flex items-center pt-2 text-sm font-medium text-gray-700">
+                <div className="col-span-1 sm:col-span-2 flex items-center sm:pt-2 text-sm font-medium text-gray-700">
                   {formatCurrency(item.total_cents)}
                 </div>
-                <div className="col-span-1 flex items-center pt-1">
-                  <button onClick={() => removeItem(item.id)} className="text-gray-400 hover:text-red-500">
+                <div className="col-span-1 sm:col-span-1 flex items-center sm:pt-1">
+                  <button onClick={() => removeItem(item.id)} className="text-gray-400 hover:text-red-500 p-1">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
