@@ -3,7 +3,7 @@
 import { getColorHex } from '@/lib/supplier/fabrik-catalog'
 import { normalizeShirtConfig } from '@/lib/pricing'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { RotateCcw, Move, Save } from 'lucide-react'
+import { RotateCcw, Move, Save, ZoomIn } from 'lucide-react'
 
 export interface ShirtMockupProps {
   shirtStyle?: string
@@ -14,24 +14,38 @@ export interface ShirtMockupProps {
   dtfFrontHeight?: number | null
   dtfBackWidth?: number | null
   dtfBackHeight?: number | null
-  initialFrontOffset?: { x: number; y: number }
-  initialBackOffset?: { x: number; y: number }
-  onSave?: (frontOffset: { x: number; y: number }, backOffset: { x: number; y: number }) => Promise<void>
+  initialFrontOffset?: { x: number; y: number; scale?: number }
+  initialBackOffset?:  { x: number; y: number; scale?: number }
+  onSave?: (
+    frontOffset: { x: number; y: number; scale: number },
+    backOffset:  { x: number; y: number; scale: number },
+  ) => Promise<void>
   className?: string
 }
 
-// Template images are 307 × 450 px.
-const TEMPLATE_W = 307
-const TEMPLATE_H = 450
-const PX_PER_INCH = 10
-
-const TEMPLATE_META: Record<string, { frontCenterY: number; backCenterY: number }> = {
-  tshirt:     { frontCenterY: 185, backCenterY: 175 },
-  longsleeve: { frontCenterY: 185, backCenterY: 175 },
-  crewneck:   { frontCenterY: 195, backCenterY: 178 },
-  hoodie:     { frontCenterY: 210, backCenterY: 178 },
-  ziphoodie:  { frontCenterY: 210, backCenterY: 178 },
+// Natural dimensions after resizing to 600px wide
+const TEMPLATE_DIMS: Record<string, { w: number; h: number }> = {
+  'tshirt-front':     { w: 600, h: 761 },
+  'tshirt-back':      { w: 600, h: 748 },
+  'longsleeve-front': { w: 600, h: 761 },
+  'longsleeve-back':  { w: 600, h: 806 },
+  'crewneck-front':   { w: 600, h: 696 },
+  'crewneck-back':    { w: 600, h: 733 },
+  'hoodie-front':     { w: 600, h: 843 },
+  'hoodie-back':      { w: 600, h: 862 },
+  'ziphoodie-front':  { w: 600, h: 837 },
+  'ziphoodie-back':   { w: 600, h: 844 },
 }
+
+// Art center Y in template pixels; PX_PER_INCH at 600px wide ≈ 19
+const TEMPLATE_META: Record<string, { frontCenterY: number; backCenterY: number }> = {
+  tshirt:     { frontCenterY: 280, backCenterY: 255 },
+  longsleeve: { frontCenterY: 280, backCenterY: 255 },
+  crewneck:   { frontCenterY: 265, backCenterY: 255 },
+  hoodie:     { frontCenterY: 330, backCenterY: 305 },
+  ziphoodie:  { frontCenterY: 340, backCenterY: 305 },
+}
+const PX_PER_INCH = 19  // template pixels per DTF inch at 600px wide
 
 function isLight(hex: string) {
   const n = parseInt(hex.replace('#', ''), 16)
@@ -43,47 +57,55 @@ export function ShirtMockup({
   color = 'White',
   frontArtworkUrl,
   backArtworkUrl,
-  dtfFrontWidth = 12,
+  dtfFrontWidth  = 12,
   dtfFrontHeight = 12,
   dtfBackWidth,
   dtfBackHeight,
-  initialFrontOffset = { x: 0, y: 0 },
-  initialBackOffset  = { x: 0, y: 0 },
+  initialFrontOffset = { x: 0, y: 0, scale: 1 },
+  initialBackOffset  = { x: 0, y: 0, scale: 1 },
   onSave,
   className = '',
 }: ShirtMockupProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [side, setSide] = useState<'front' | 'back'>('front')
-  const [frontOffset, setFrontOffset] = useState(initialFrontOffset)
-  const [backOffset,  setBackOffset]  = useState(initialBackOffset)
+  const [frontState, setFrontState] = useState({ x: initialFrontOffset.x, y: initialFrontOffset.y, scale: initialFrontOffset.scale ?? 1 })
+  const [backState,  setBackState]  = useState({ x: initialBackOffset.x,  y: initialBackOffset.y,  scale: initialBackOffset.scale  ?? 1 })
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved]   = useState(false)
+  const [saved,  setSaved]  = useState(false)
 
   const draggingRef  = useRef(false)
   const sideRef      = useRef<'front' | 'back'>('front')
-  const frontOffRef  = useRef(initialFrontOffset)
-  const backOffRef   = useRef(initialBackOffset)
+  const frontRef     = useRef(frontState)
+  const backRef      = useRef(backState)
   const dragAnchor   = useRef({ tmplX: 0, tmplY: 0, offX: 0, offY: 0 })
 
-  useEffect(() => { sideRef.current = side }, [side])
-  useEffect(() => { frontOffRef.current = frontOffset }, [frontOffset])
-  useEffect(() => { backOffRef.current  = backOffset  }, [backOffset])
+  useEffect(() => { sideRef.current  = side }, [side])
+  useEffect(() => { frontRef.current = frontState }, [frontState])
+  useEffect(() => { backRef.current  = backState  }, [backState])
+
+  const isFront = side === 'front'
+  const state   = isFront ? frontState : backState
+  const templateKey = `${shirtStyle}-${side}`
+  const dims  = TEMPLATE_DIMS[templateKey] ?? { w: 600, h: 800 }
+  const meta  = TEMPLATE_META[shirtStyle]  ?? TEMPLATE_META.tshirt
 
   const toTemplateCoords = useCallback((clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect) return { x: 0, y: 0 }
     return {
-      x: ((clientX - rect.left)  / rect.width)  * TEMPLATE_W,
-      y: ((clientY - rect.top)   / rect.height) * TEMPLATE_H,
+      x: ((clientX - rect.left)  / rect.width)  * dims.w,
+      y: ((clientY - rect.top)   / rect.height) * dims.h,
     }
+    // deps intentionally omit dims — dims.w/h are stable per render; stale closure is fine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const startDrag = useCallback((clientX: number, clientY: number) => {
     draggingRef.current = true
     const { x, y } = toTemplateCoords(clientX, clientY)
-    const off = sideRef.current === 'front' ? frontOffRef.current : backOffRef.current
-    dragAnchor.current = { tmplX: x, tmplY: y, offX: off.x, offY: off.y }
+    const s = sideRef.current === 'front' ? frontRef.current : backRef.current
+    dragAnchor.current = { tmplX: x, tmplY: y, offX: s.x, offY: s.y }
   }, [toTemplateCoords])
 
   useEffect(() => {
@@ -94,8 +116,8 @@ export function ShirtMockup({
         x: dragAnchor.current.offX + (x - dragAnchor.current.tmplX),
         y: dragAnchor.current.offY + (y - dragAnchor.current.tmplY),
       }
-      if (sideRef.current === 'front') setFrontOffset(newOff)
-      else setBackOffset(newOff)
+      if (sideRef.current === 'front') setFrontState(s => ({ ...s, ...newOff }))
+      else                             setBackState(s  => ({ ...s, ...newOff }))
     }
     const mm = (e: MouseEvent) => move(e.clientX, e.clientY)
     const mu = () => { draggingRef.current = false }
@@ -114,28 +136,28 @@ export function ShirtMockup({
   }, [toTemplateCoords])
 
   const hex   = getColorHex(color) ?? '#d0d0d0'
-  const meta  = TEMPLATE_META[shirtStyle] ?? TEMPLATE_META.tshirt
   const light = isLight(hex)
 
-  const isFront  = side === 'front'
-  const artUrl   = isFront ? frontArtworkUrl : backArtworkUrl
-  const artW     = Number((isFront ? dtfFrontWidth  : dtfBackWidth)  ?? 12)
-  const artH     = Number((isFront ? dtfFrontHeight : dtfBackHeight) ?? 12)
-  const offset   = isFront ? frontOffset : backOffset
+  const artUrl = isFront ? frontArtworkUrl : backArtworkUrl
+  const artW   = Number((isFront ? dtfFrontWidth  : dtfBackWidth)  ?? 12)
+  const artH   = Number((isFront ? dtfFrontHeight : dtfBackHeight) ?? 12)
 
-  const frontChanged = frontOffset.x !== initialFrontOffset.x || frontOffset.y !== initialFrontOffset.y
-  const backChanged  = backOffset.x  !== initialBackOffset.x  || backOffset.y  !== initialBackOffset.y
-  const hasChanged   = frontChanged || backChanged
+  const artPxW   = artW * PX_PER_INCH * state.scale
+  const artPxH   = artH * PX_PER_INCH * state.scale
+  const centerY  = isFront ? meta.frontCenterY : meta.backCenterY
+  const artX     = dims.w / 2 - artPxW / 2 + state.x
+  const artY     = centerY    - artPxH / 2 + state.y
 
-  const artPxW    = artW * PX_PER_INCH
-  const artPxH    = artH * PX_PER_INCH
-  const centerY   = isFront ? meta.frontCenterY : meta.backCenterY
-  const artX      = TEMPLATE_W / 2 - artPxW / 2 + offset.x
-  const artY      = centerY - artPxH / 2 + offset.y
-  const artLeftPct = (artX / TEMPLATE_W) * 100
-  const artTopPct  = (artY / TEMPLATE_H) * 100
-  const artWPct    = (artPxW / TEMPLATE_W) * 100
-  const artHPct    = (artPxH / TEMPLATE_H) * 100
+  const artLeftPct = (artX / dims.w) * 100
+  const artTopPct  = (artY / dims.h) * 100
+  const artWPct    = (artPxW / dims.w) * 100
+  const artHPct    = (artPxH / dims.h) * 100
+
+  const initFront = { x: initialFrontOffset.x, y: initialFrontOffset.y, scale: initialFrontOffset.scale ?? 1 }
+  const initBack  = { x: initialBackOffset.x,  y: initialBackOffset.y,  scale: initialBackOffset.scale  ?? 1 }
+  const hasChanged =
+    frontState.x !== initFront.x || frontState.y !== initFront.y || frontState.scale !== initFront.scale ||
+    backState.x  !== initBack.x  || backState.y  !== initBack.y  || backState.scale  !== initBack.scale
 
   const templateSrc   = `/mockup-templates/${shirtStyle}-${side}.png`
   const borderColor   = light ? 'rgba(0,0,0,0.22)' : 'rgba(255,255,255,0.40)'
@@ -144,56 +166,70 @@ export function ShirtMockup({
   async function handleSave() {
     if (!onSave) return
     setSaving(true)
-    await onSave(frontOffset, backOffset)
+    await onSave(frontState, backState)
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
+  function resetCurrent() {
+    if (isFront) setFrontState({ x: 0, y: 0, scale: 1 })
+    else         setBackState({ x: 0, y: 0, scale: 1 })
+  }
+
+  const isReset = state.x === 0 && state.y === 0 && state.scale === 1
+
   return (
     <div className={`flex flex-col items-center gap-2 ${className}`}>
-      {/* Controls row */}
+
+      {/* Front / Back toggle */}
       <div className="flex items-center gap-2 flex-wrap justify-center">
-        {/* Front / Back toggle — always visible */}
         <div className="flex overflow-hidden rounded-lg border border-gray-200 text-xs">
           {(['front', 'back'] as const).map(s => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSide(s)}
+            <button key={s} type="button" onClick={() => setSide(s)}
               className={`px-3 py-1.5 font-medium capitalize transition-colors ${
                 side === s ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
               }`}
-            >
-              {s}
-            </button>
+            >{s}</button>
           ))}
         </div>
 
-        {/* Reset offset for current side */}
-        {(offset.x !== 0 || offset.y !== 0) && (
-          <button
-            type="button"
-            onClick={() => isFront ? setFrontOffset({ x: 0, y: 0 }) : setBackOffset({ x: 0, y: 0 })}
+        {!isReset && (
+          <button type="button" onClick={resetCurrent}
             className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-500 hover:text-gray-800 transition-colors"
           >
             <RotateCcw className="h-3 w-3" /> Reset
           </button>
         )}
 
-        {/* Save button (only when onSave prop provided and position changed) */}
         {onSave && hasChanged && (
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving}
             className="flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
           >
             <Save className="h-3 w-3" />
-            {saved ? 'Saved!' : saving ? 'Saving…' : 'Save position'}
+            {saved ? 'Saved!' : saving ? 'Saving…' : 'Save'}
           </button>
         )}
       </div>
+
+      {/* Scale slider */}
+      {artUrl && (
+        <div className="flex items-center gap-2 w-full max-w-[260px]">
+          <ZoomIn className="h-3 w-3 text-gray-400 shrink-0" />
+          <input
+            type="range"
+            min={40} max={200} step={1}
+            value={Math.round(state.scale * 100)}
+            onChange={e => {
+              const s = parseInt(e.target.value) / 100
+              if (isFront) setFrontState(st => ({ ...st, scale: s }))
+              else         setBackState(st  => ({ ...st, scale: s }))
+            }}
+            className="flex-1 h-1 accent-indigo-600"
+          />
+          <span className="text-xs text-gray-400 w-9 text-right">{Math.round(state.scale * 100)}%</span>
+        </div>
+      )}
 
       {/* Mockup stack */}
       <div
@@ -202,23 +238,12 @@ export function ShirtMockup({
         style={{ isolation: 'isolate' }}
       >
         {/* Layer 1: Photo template */}
-        <img
-          src={templateSrc}
-          alt={`${shirtStyle} ${side}`}
-          className="block w-full"
-          draggable={false}
-        />
+        <img src={templateSrc} alt={`${shirtStyle} ${side}`} className="block w-full" draggable={false} />
 
-        {/* Layer 2: Shirt color via multiply */}
-        <div
-          style={{
-            position: 'absolute', inset: 0,
-            backgroundColor: hex,
-            mixBlendMode: 'multiply',
-          }}
-        />
+        {/* Layer 2: Shirt color via multiply blend */}
+        <div style={{ position: 'absolute', inset: 0, backgroundColor: hex, mixBlendMode: 'multiply' }} />
 
-        {/* Layer 3a: Artwork image */}
+        {/* Layer 3a: Artwork */}
         {artUrl && (
           <img
             src={artUrl}
@@ -240,37 +265,23 @@ export function ShirtMockup({
 
         {/* Layer 3b: Placeholder when no artwork */}
         {!artUrl && (
-          <svg
-            viewBox={`0 0 ${TEMPLATE_W} ${TEMPLATE_H}`}
+          <svg viewBox={`0 0 ${dims.w} ${dims.h}`}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
           >
-            <rect
-              x={artX} y={artY} width={artPxW} height={artPxH}
-              fill="none" rx="2"
-              stroke={borderColor} strokeWidth="1" strokeDasharray="5 3"
-            />
-            <text
-              x={artX + artPxW / 2} y={artY + artPxH / 2}
+            <rect x={artX} y={artY} width={artPxW} height={artPxH}
+              fill="none" rx="3" stroke={borderColor} strokeWidth="1.5" strokeDasharray="8 4" />
+            <text x={artX + artPxW / 2} y={artY + artPxH / 2}
               textAnchor="middle" dominantBaseline="middle"
-              fill={placeholderFill} fontSize="9" fontFamily="system-ui, sans-serif"
-            >
-              {artW}″ × {artH}″
-            </text>
+              fill={placeholderFill} fontSize="14" fontFamily="system-ui, sans-serif"
+            >{artW}″ × {artH}″</text>
           </svg>
         )}
 
         {/* Layer 4: Fabric depth */}
-        <img
-          src={templateSrc}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
+        <img src={templateSrc} alt="" aria-hidden="true" draggable={false}
           style={{
-            position: 'absolute', inset: 0,
-            width: '100%', height: '100%',
-            mixBlendMode: 'multiply',
-            opacity: 0.22,
-            pointerEvents: 'none',
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            mixBlendMode: 'multiply', opacity: 0.22, pointerEvents: 'none',
           }}
         />
       </div>
@@ -311,9 +322,9 @@ function filePublicUrl(storagePath: string) {
 }
 
 export function ShirtMockupCard({ config, orderFiles = [], orderId, className = '' }: ShirtMockupCardProps) {
-  const normalized = normalizeShirtConfig(config)
+  const normalized   = normalizeShirtConfig(config)
   const colorGroups: any[] = normalized.color_groups ?? []
-  const colors = colorGroups.map((g: any) => g.color).filter(Boolean)
+  const colors       = colorGroups.map((g: any) => g.color).filter(Boolean)
 
   const styleGroups: any[] = config?.style_groups ?? []
   let shirtStyle: string = config?.shirt_style ?? 'tshirt'
@@ -327,29 +338,27 @@ export function ShirtMockupCard({ config, orderFiles = [], orderId, className = 
     }
   }
 
-  // Resolve artwork URLs: prefer config URLs, fall back to order_files records
   const frontFile = orderFiles.find(f => f.file_type === 'front_artwork')
   const backFile  = orderFiles.find(f => f.file_type === 'back_artwork')
   const frontArtworkUrl = config?.front_file_url ?? (frontFile ? filePublicUrl(frontFile.storage_path) : null)
   const backArtworkUrl  = config?.back_file_url  ?? (backFile  ? filePublicUrl(backFile.storage_path)  : null)
 
-  // Persisted artwork offsets
   const savedOffsets = config?.artwork_offsets ?? {}
-  const initialFront = savedOffsets.front ?? { x: 0, y: 0 }
-  const initialBack  = savedOffsets.back  ?? { x: 0, y: 0 }
+  const initialFront = savedOffsets.front ?? { x: 0, y: 0, scale: 1 }
+  const initialBack  = savedOffsets.back  ?? { x: 0, y: 0, scale: 1 }
 
   const [selectedColor, setSelectedColor] = useState(colors[0] ?? 'White')
 
-  async function handleSave(frontOffset: { x: number; y: number }, backOffset: { x: number; y: number }) {
+  async function handleSave(
+    frontOffset: { x: number; y: number; scale: number },
+    backOffset:  { x: number; y: number; scale: number },
+  ) {
     if (!orderId) return
     await fetch(`/api/orders/${orderId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        configuration: {
-          ...config,
-          artwork_offsets: { front: frontOffset, back: backOffset },
-        },
+        configuration: { ...config, artwork_offsets: { front: frontOffset, back: backOffset } },
       }),
     })
   }
@@ -359,9 +368,7 @@ export function ShirtMockupCard({ config, orderFiles = [], orderId, className = 
       {colors.length > 1 && (
         <div className="mb-3 flex items-center gap-2">
           <label className="text-xs text-gray-500 whitespace-nowrap">Preview colour</label>
-          <select
-            value={selectedColor}
-            onChange={e => setSelectedColor(e.target.value)}
+          <select value={selectedColor} onChange={e => setSelectedColor(e.target.value)}
             className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-xs"
           >
             {colors.map(c => <option key={c}>{c}</option>)}
