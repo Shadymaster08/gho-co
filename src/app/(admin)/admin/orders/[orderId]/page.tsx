@@ -193,6 +193,7 @@ export default function AdminOrderDetailPage() {
             <Card header={<span className="font-semibold text-gray-900">Billing information</span>}>
               <div className="grid gap-1 text-sm">
                 {order.billing.full_name && <p><span className="text-gray-400 w-28 inline-block">Name</span>{order.billing.full_name}</p>}
+                {order.profiles?.email && <p><span className="text-gray-400 w-28 inline-block">Email</span><a href={`mailto:${order.profiles.email}`} className="text-indigo-600 hover:underline">{order.profiles.email}</a></p>}
                 {order.billing.phone && <p><span className="text-gray-400 w-28 inline-block">Phone</span>{order.billing.phone}</p>}
                 {order.billing.address_line1 && (
                   <p><span className="text-gray-400 w-28 inline-block">Address</span>
