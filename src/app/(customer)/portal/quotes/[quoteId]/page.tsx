@@ -16,6 +16,8 @@ export default function CustomerQuotePage() {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(false)
+  const [declining, setDeclining] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
 
   useEffect(() => {
     if (!quoteId) return
@@ -24,12 +26,15 @@ export default function CustomerQuotePage() {
       .then(({ data }) => { setQuote(data); setLoading(false) })
   }, [quoteId])
 
-  async function respond(action: 'accepted' | 'declined') {
+  async function respond(action: 'accepted' | 'declined', reason?: string) {
     setActing(true)
+    const body: Record<string, string> = { status: action }
+    if (reason?.trim()) body.decline_reason = reason.trim()
+
     const res = await fetch(`/api/quotes/${quoteId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: action }),
+      body: JSON.stringify(body),
     })
 
     if (!res.ok) {
@@ -94,14 +99,37 @@ export default function CustomerQuotePage() {
       </Card>
 
       {quote.status === 'sent' && (
-        <div className="flex gap-3">
-          <Button onClick={() => respond('accepted')} loading={acting} className="flex-1">
-            Accept quote
-          </Button>
-          <Button variant="danger" onClick={() => respond('declined')} loading={acting} className="flex-1">
-            Decline
-          </Button>
-        </div>
+        <>
+          {declining ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex flex-col gap-3">
+              <p className="text-sm font-medium text-gray-700">Why are you declining this quote? <span className="text-gray-400 font-normal">(optional)</span></p>
+              <textarea
+                value={declineReason}
+                onChange={e => setDeclineReason(e.target.value)}
+                rows={3}
+                placeholder="e.g. price too high, changed my mind..."
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              />
+              <div className="flex gap-2">
+                <Button variant="danger" onClick={() => respond('declined', declineReason)} loading={acting} className="flex-1">
+                  Confirm decline
+                </Button>
+                <Button variant="secondary" onClick={() => { setDeclining(false); setDeclineReason('') }} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3">
+              <Button onClick={() => respond('accepted')} loading={acting} className="flex-1">
+                Accept quote
+              </Button>
+              <Button variant="danger" onClick={() => setDeclining(true)} className="flex-1">
+                Decline
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

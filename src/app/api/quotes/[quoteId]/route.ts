@@ -32,19 +32,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ qu
 
   // Customers can only accept or decline a sent quote
   if (!isAdmin) {
-    const { status } = body
+    const { status, decline_reason } = body
     if (status !== 'accepted' && status !== 'declined') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { data: current } = await supabase.from('quotes').select('status, order_id').eq('id', quoteId).single()
-    if (current?.status !== 'sent') return NextResponse.json({ error: 'Quote cannot be updated' }, { status: 400 })
+    // Verify ownership via RLS-enabled client
+    const { data: current } = await supabase
+      .from('quotes')
+      .select('status, order_id')
+      .eq('id', quoteId)
+      .single()
+    if (!current) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
+    if (current.status !== 'sent') return NextResponse.json({ error: 'Quote cannot be updated' }, { status: 400 })
 
     const update: any = { status }
     if (status === 'accepted') update.accepted_at = new Date().toISOString()
-    if (status === 'declined') update.declined_at = new Date().toISOString()
+    if (status === 'declined') {
+      update.declined_at = new Date().toISOString()
+      if (decline_reason?.trim()) {
+        update.internal_notes = `Decline reason: ${decline_reason.trim()}`
+      }
+    }
 
-    const { data, error } = await supabase
+    // Use service client for the actual update — customers don't have UPDATE RLS on quotes
+    const service = createServiceClient()
+    const { data, error } = await service
       .from('quotes')
       .update(update)
       .eq('id', quoteId)
@@ -52,7 +65,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ qu
       .single()
 
     if (status === 'accepted' && current.order_id) {
-      await supabase.from('orders').update({ status: 'approved' }).eq('id', current.order_id)
+      await service.from('orders').update({ status: 'approved' }).eq('id', current.order_id)
     }
 
     if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 })
