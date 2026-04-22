@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: 'Failed to create expense' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'Failed to create expense', detail: error.message }, { status: 500 })
 
   if (splits?.length) {
     await service.from('expense_splits').insert(

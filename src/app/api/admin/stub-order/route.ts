@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const service = createServiceClient()
   const { data: order, error } = await service
     .from('orders')
-    .insert({ customer_id, product_type: 'custom', configuration: {}, status: 'in_review' })
+    .insert({ customer_id, product_type: 'diy', configuration: { custom_quote: true }, status: 'in_review' })
     .select('id, order_number')
     .single()
 
