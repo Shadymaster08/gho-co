@@ -126,7 +126,7 @@ export default function PrintOrderPage() {
       <h1 className="mb-2 text-2xl font-bold text-gray-900">3D Print Order</h1>
       <p className="mb-8 text-gray-500">Upload your STL file or describe what you want and we will take care of the rest.</p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-xl bg-white p-8 shadow-sm border border-gray-200">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-6 rounded-xl bg-white p-4 sm:p-8 shadow-sm border border-gray-200">
 
         {/* Mode toggle */}
         <div>
