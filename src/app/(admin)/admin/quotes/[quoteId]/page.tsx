@@ -28,11 +28,15 @@ export default function AdminQuoteDetailPage() {
       .then(data => { setQuote(data); setLoading(false) })
   }, [quoteId])
 
-  async function sendQuote() {
+  async function sendQuote(force = false) {
     setSending(true)
-    const res = await fetch(`/api/quotes/${quoteId}/send`, { method: 'POST' })
+    const res = await fetch(`/api/quotes/${quoteId}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
+    })
     if (!res.ok) toast.error('Failed to send quote.')
-    else { toast.success('Quote sent to customer!'); setQuote((q: any) => ({ ...q, status: 'sent' })) }
+    else { toast.success(force ? 'Quote resent to customer!' : 'Quote sent to customer!'); setQuote((q: any) => ({ ...q, status: 'sent' })) }
     setSending(false)
   }
 
@@ -248,14 +252,19 @@ export default function AdminQuoteDetailPage() {
         </Card>
       )}
 
-      {isDraft && (
-        <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
+        {isDraft && (
           <Link href={`/admin/quotes/new?quoteId=${quoteId}`}>
             <Button variant="secondary">Edit quote</Button>
           </Link>
-          <Button onClick={sendQuote} loading={sending}>Send to customer</Button>
-        </div>
-      )}
+        )}
+        {isDraft && (
+          <Button onClick={() => sendQuote(false)} loading={sending}>Send to customer</Button>
+        )}
+        {!isDraft && quote.status !== 'declined' && (
+          <Button onClick={() => sendQuote(true)} loading={sending} variant="secondary">Resend quote</Button>
+        )}
+      </div>
 
       {quote.status === 'accepted' && (
         <Link href={`/admin/invoices/new?quoteId=${quoteId}`}>

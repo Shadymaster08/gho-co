@@ -22,11 +22,11 @@ export default function AdminInvoiceDetailPage() {
       .then(data => { setInvoice(data); setLoading(false) })
   }, [invoiceId])
 
-  async function sendInvoice() {
+  async function sendInvoice(resend = false) {
     setActing(true)
     const res = await fetch(`/api/invoices/${invoiceId}/send`, { method: 'POST' })
     if (!res.ok) toast.error('Failed to send invoice.')
-    else { toast.success('Invoice sent!'); setInvoice((i: any) => ({ ...i, status: 'sent' })) }
+    else { toast.success(resend ? 'Invoice resent!' : 'Invoice sent!'); setInvoice((i: any) => ({ ...i, status: 'sent' })) }
     setActing(false)
   }
 
@@ -105,9 +105,12 @@ export default function AdminInvoiceDetailPage() {
         )}
       </Card>
 
-      <div className="flex gap-3 no-print">
+      <div className="flex flex-wrap gap-3 no-print">
         {invoice.status === 'draft' && (
-          <Button onClick={sendInvoice} loading={acting}>Send to customer</Button>
+          <Button onClick={() => sendInvoice(false)} loading={acting}>Send to customer</Button>
+        )}
+        {invoice.status !== 'draft' && invoice.status !== 'paid' && (
+          <Button onClick={() => sendInvoice(true)} loading={acting} variant="secondary">Resend invoice</Button>
         )}
         {invoice.status === 'sent' && (
           <Button onClick={markPaid} loading={acting} variant="secondary">Mark as paid</Button>
