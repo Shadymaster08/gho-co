@@ -30,11 +30,8 @@ export default function AdminQuoteDetailPage() {
 
   async function sendQuote(force = false) {
     setSending(true)
-    const res = await fetch(`/api/quotes/${quoteId}/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ force }),
-    })
+    const url = force ? `/api/quotes/${quoteId}/send?force=true` : `/api/quotes/${quoteId}/send`
+    const res = await fetch(url, { method: 'POST' })
     if (!res.ok) toast.error('Failed to send quote.')
     else { toast.success(force ? 'Quote resent to customer!' : 'Quote sent to customer!'); setQuote((q: any) => ({ ...q, status: 'sent' })) }
     setSending(false)

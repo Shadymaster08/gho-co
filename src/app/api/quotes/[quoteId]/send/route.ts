@@ -21,8 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ quo
     .single()
 
   if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 })
-  const body = request.headers.get('content-type')?.includes('json') ? await request.json().catch(() => ({})) : {}
-  const force = body?.force === true
+  const force = new URL(request.url).searchParams.get('force') === 'true'
   if (!force && quote.status !== 'draft') return NextResponse.json({ error: 'Quote already sent' }, { status: 400 })
 
   const customer = (quote as any).orders?.profiles

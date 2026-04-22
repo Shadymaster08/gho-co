@@ -18,7 +18,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ inv
     .single()
 
   if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
-  const body = request.headers.get('content-type')?.includes('json') ? await request.json().catch(() => ({})) : {}
 
   const customer = (invoice as any).orders?.profiles
   const invoiceUrl = `${process.env.NEXT_PUBLIC_APP_URL}/portal/invoices/${invoiceId}`
