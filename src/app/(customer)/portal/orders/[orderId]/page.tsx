@@ -103,7 +103,11 @@ export default async function PortalOrderDetailPage({ params }: { params: Promis
         <div className="flex flex-col gap-6">
           {order.product_type === 'shirt' && order.configuration && (
             <Card header={<span className="font-semibold text-gray-900">Your design</span>}>
-              <ShirtMockupCard config={order.configuration} />
+              <ShirtMockupCard
+                config={order.configuration}
+                orderFiles={order.order_files ?? []}
+                orderId={order.id}
+              />
             </Card>
           )}
 
